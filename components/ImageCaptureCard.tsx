@@ -9,9 +9,10 @@ type ImageCaptureCardProps = {
   description: string;
   required?: boolean;
   onReadyChange?: (id: string, ready: boolean) => void;
+  onFileChange?: (id: string, file: File | null) => void;
 };
 
-export function ImageCaptureCard({ id, title, description, required, onReadyChange }: ImageCaptureCardProps) {
+export function ImageCaptureCard({ id, title, description, required, onReadyChange, onFileChange }: ImageCaptureCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -24,7 +25,7 @@ export function ImageCaptureCard({ id, title, description, required, onReadyChan
   }, []);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const file = event.target.files?.[0] ?? null;
     const ready = Boolean(file);
 
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -34,6 +35,7 @@ export function ImageCaptureCard({ id, title, description, required, onReadyChan
     setPreviewUrl(nextPreviewUrl);
     setFileName(file?.name || "");
     onReadyChange?.(id, ready);
+    onFileChange?.(id, file);
   }
 
   return (
