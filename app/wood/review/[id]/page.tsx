@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { AppShell, BottomActionBar, ImageCaptureCard, ReceiptCard } from "@/components";
 import { receipts } from "@/lib/mock-data";
 
-export default async function ReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default function ReviewDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const receipt = receipts.find((item) => item.id === id);
 
   if (!receipt) {
