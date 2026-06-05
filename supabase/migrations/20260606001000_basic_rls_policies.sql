@@ -32,12 +32,6 @@ create policy ai_analysis_read_active_authenticated
   to authenticated
   using (deleted_at is null);
 
-create policy audit_logs_read_authenticated
-  on public.audit_logs
-  for select
-  to authenticated
-  using (true);
-
 create policy wood_receipts_insert_authenticated
   on public.wood_receipts
   for insert
