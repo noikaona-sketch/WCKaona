@@ -6,7 +6,8 @@ import { BottomActionBar } from "@/components/BottomActionBar";
 import { ImageCaptureCard } from "@/components/ImageCaptureCard";
 import { MobileHeader } from "@/components/MobileHeader";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { RequiredReceiptImageId, ReceiptImageFiles, uploadReceiptImages } from "@/lib/storage/upload-receipt-images";
+import { uploadReceiptImages } from "@/lib/storage/upload-receipt-images";
+import type { ReceiptImageFiles, RequiredReceiptImageId } from "@/lib/storage/upload-receipt-images";
 
 const requiredImages: Array<{ id: RequiredReceiptImageId; title: string; description: string }> = [
   { id: "truck_plate", title: "ทะเบียนรถ", description: "Truck Plate" },
