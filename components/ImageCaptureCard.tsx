@@ -24,18 +24,33 @@ export function ImageCaptureCard({ id, title, description, required, onReadyChan
     };
   }, []);
 
+  function clearPreview() {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
-    const ready = Boolean(file);
+    const acceptedFile = file?.type === "image/jpeg" ? file : null;
+    const ready = Boolean(acceptedFile);
 
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    clearPreview();
 
-    const nextPreviewUrl = file ? URL.createObjectURL(file) : null;
+    if (file && !acceptedFile) {
+      event.target.value = "";
+      setFileName("รองรับเฉพาะไฟล์ JPEG");
+      onReadyChange?.(id, false);
+      onFileChange?.(id, null);
+      return;
+    }
+
+    const nextPreviewUrl = acceptedFile ? URL.createObjectURL(acceptedFile) : null;
     previewUrlRef.current = nextPreviewUrl;
     setPreviewUrl(nextPreviewUrl);
-    setFileName(file?.name || "");
+    setFileName(acceptedFile?.name || "");
     onReadyChange?.(id, ready);
-    onFileChange?.(id, file);
+    onFileChange?.(id, acceptedFile);
   }
 
   return (
@@ -69,7 +84,7 @@ export function ImageCaptureCard({ id, title, description, required, onReadyChan
         ref={inputRef}
         className="sr-only"
         type="file"
-        accept="image/*"
+        accept="image/jpeg"
         capture="environment"
         onChange={handleFileChange}
       />
