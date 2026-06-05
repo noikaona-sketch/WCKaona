@@ -31,4 +31,11 @@ create policy wood_receipts_storage_upload_authenticated
   on storage.objects
   for insert
   to authenticated
-  with check (bucket_id = 'wood-receipts');
+  with check (
+    bucket_id = 'wood-receipts'
+    and storage.foldername(name)[1] = 'receipt'
+    and storage.foldername(name)[2] is not null
+    and storage.foldername(name)[2] <> ''
+    and array_length(storage.foldername(name), 1) = 2
+    and storage.filename(name) in ('01_size.jpg', '02_moisture.jpg', '03_license.jpg')
+  );
