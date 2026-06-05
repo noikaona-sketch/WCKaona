@@ -1,6 +1,7 @@
 "use client";
 
-import { ChangeEvent, useRef, useState } from "react";
+import Image from "next/image";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 type ImageCaptureCardProps = {
   id: string;
@@ -15,11 +16,16 @@ export function ImageCaptureCard({ id, title, description, required, onReadyChan
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     const ready = Boolean(file);
 
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(file ? URL.createObjectURL(file) : null);
     setFileName(file?.name || "");
     onReadyChange?.(id, ready);
@@ -43,7 +49,7 @@ export function ImageCaptureCard({ id, title, description, required, onReadyChan
         className="relative flex min-h-36 w-full overflow-hidden rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50 text-sm font-semibold text-brand-primary"
       >
         {previewUrl ? (
-          <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <Image src={previewUrl} alt="" fill sizes="100vw" unoptimized className="object-cover" />
         ) : (
           <span className="m-auto">แตะเพื่อเปิดกล้อง</span>
         )}
