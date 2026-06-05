@@ -1,16 +1,66 @@
-export function ImageCaptureCard({ title, description, required, status }: { title: string; description: string; required?: boolean; status: "empty" | "ready" }) {
+"use client";
+
+import { ChangeEvent, useRef, useState } from "react";
+
+type ImageCaptureCardProps = {
+  id: string;
+  title: string;
+  description: string;
+  required?: boolean;
+  onReadyChange?: (id: string, ready: boolean) => void;
+};
+
+export function ImageCaptureCard({ id, title, description, required, onReadyChange }: ImageCaptureCardProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string>("");
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const ready = Boolean(file);
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(file ? URL.createObjectURL(file) : null);
+    setFileName(file?.name || "");
+    onReadyChange?.(id, ready);
+  }
+
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-soft">
-      <div className="mb-4 flex items-center justify-between">
+    <section className={`rounded-2xl border bg-white p-4 shadow-soft ${previewUrl ? "border-orange-200" : "border-slate-100"}`}>
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-slate-950">{title}</h2>
+          <h2 className="font-semibold text-[#14213d]">{title}</h2>
           <p className="text-sm text-slate-500">{description}</p>
         </div>
-        {required ? <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-brand-danger">บังคับ</span> : null}
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${previewUrl ? "bg-orange-50 text-[#14213d]" : "bg-red-50 text-brand-danger"}`}>
+          {previewUrl ? "ครบ" : required ? "บังคับ" : "รอรูป"}
+        </span>
       </div>
-      <button className="flex min-h-28 w-full items-center justify-center rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50 text-sm font-semibold text-brand-primary">
-        {status === "ready" ? "ดูตัวอย่างภาพ" : "+ ถ่ายภาพ / เลือกรูป"}
+
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="relative flex min-h-36 w-full overflow-hidden rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50 text-sm font-semibold text-brand-primary"
+      >
+        {previewUrl ? (
+          <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          <span className="m-auto">แตะเพื่อเปิดกล้อง</span>
+        )}
+        <span className="absolute inset-x-3 bottom-3 rounded-xl bg-[#ff5a1f] px-4 py-3 text-center font-bold text-[#14213d] shadow-soft">
+          {previewUrl ? "ถ่ายใหม่" : "ถ่ายภาพ"}
+        </span>
       </button>
+
+      <input
+        ref={inputRef}
+        className="sr-only"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+      />
+      {fileName ? <p className="mt-2 truncate text-xs font-medium text-slate-500">{fileName}</p> : null}
     </section>
   );
 }
