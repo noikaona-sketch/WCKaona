@@ -1,13 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { BottomActionBar } from "@/components/BottomActionBar";
 import { ImageCaptureCard } from "@/components/ImageCaptureCard";
 import { MobileHeader } from "@/components/MobileHeader";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { uploadReceiptImages } from "@/lib/storage/upload-receipt-images";
+import { createDraftWoodReceipt, uploadReceiptImages } from "@/lib/storage/upload-receipt-images";
 import type { ReceiptImageFiles, RequiredReceiptImageId } from "@/lib/storage/upload-receipt-images";
+
+type SupplierOption = {
+  id: string;
+  name: string;
+  supplier_code: string;
+};
 
 const requiredImages: Array<{ id: RequiredReceiptImageId; title: string; description: string }> = [
   { id: "truck_plate", title: "ทะเบียนรถ", description: "Truck Plate" },
@@ -15,15 +21,75 @@ const requiredImages: Array<{ id: RequiredReceiptImageId; title: string; descrip
   { id: "wood_load", title: "ไม้บนรถ + PVC", description: "Wood + PVC Reference" },
 ];
 
+function collectReceiptFiles(imageFiles: Partial<Record<RequiredReceiptImageId, File>>): ReceiptImageFiles | null {
+  const woodLoad = imageFiles.wood_load;
+  const moistureMeter = imageFiles.moisture_meter;
+  const truckPlate = imageFiles.truck_plate;
+
+  if (!woodLoad || !moistureMeter || !truckPlate) return null;
+
+  return {
+    wood_load: woodLoad,
+    moisture_meter: moistureMeter,
+    truck_plate: truckPlate,
+  };
+}
+
 export default function NewReceiptPage() {
-  const [receiptId, setReceiptId] = useState("");
   const [readyImages, setReadyImages] = useState<Record<string, boolean>>({});
   const [imageFiles, setImageFiles] = useState<Partial<Record<RequiredReceiptImageId, File>>>({});
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const readyCount = useMemo(() => requiredImages.filter((image) => readyImages[image.id]).length, [readyImages]);
   const allImagesReady = readyCount === requiredImages.length;
-  const canUpload = allImagesReady && Boolean(receiptId.trim()) && !isUploading;
+  const canUpload = allImagesReady && Boolean(selectedSupplierId) && !isUploading && !isLoadingSuppliers;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSuppliers() {
+      setIsLoadingSuppliers(true);
+      setUploadMessage("");
+
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) throw sessionError;
+        if (!sessionData.session) {
+          if (isMounted) setUploadMessage("กรุณาเข้าสู่ระบบก่อนอัปโหลดรูป");
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("suppliers")
+          .select("id, name, supplier_code")
+          .order("name", { ascending: true });
+
+        if (error) throw error;
+
+        if (isMounted) {
+          const supplierOptions = data ?? [];
+          setSuppliers(supplierOptions);
+          setSelectedSupplierId((current) => current || supplierOptions[0]?.id || "");
+          if (supplierOptions.length === 0) setUploadMessage("ยังไม่มี supplier สำหรับสร้าง draft receipt");
+        }
+      } catch (error) {
+        if (isMounted) setUploadMessage(error instanceof Error ? error.message : "โหลด supplier ไม่สำเร็จ");
+      } finally {
+        if (isMounted) setIsLoadingSuppliers(false);
+      }
+    }
+
+    loadSuppliers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function handleReadyChange(id: string, ready: boolean) {
     setReadyImages((current) => ({ ...current, [id]: ready }));
@@ -36,25 +102,31 @@ export default function NewReceiptPage() {
   async function handleUploadImages() {
     if (!canUpload) return;
 
-    const files = requiredImages.reduce<Partial<ReceiptImageFiles>>((current, image) => {
-      const file = imageFiles[image.id];
-      if (file) current[image.id] = file;
-      return current;
-    }, {});
-
-    if (!files.wood_load || !files.moisture_meter || !files.truck_plate) return;
+    const files = collectReceiptFiles(imageFiles);
+    if (!files) return;
 
     setIsUploading(true);
     setUploadMessage("");
 
     try {
       const supabase = createBrowserSupabaseClient();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+      if (!sessionData.session) throw new Error("กรุณาเข้าสู่ระบบก่อนอัปโหลดรูป");
+
+      const receipt = await createDraftWoodReceipt({
+        supabase,
+        supplierId: selectedSupplierId,
+      });
+
       await uploadReceiptImages({
         supabase,
-        receiptId: receiptId.trim(),
-        files: files as ReceiptImageFiles,
+        receiptId: receipt.id,
+        files,
       });
-      setUploadMessage("อัปโหลดรูปและบันทึก receipt_images แล้ว");
+
+      setUploadMessage(`สร้าง draft receipt ${receipt.receipt_no} และบันทึกรูปครบแล้ว`);
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ");
     } finally {
@@ -78,14 +150,22 @@ export default function NewReceiptPage() {
 
       <section className="mb-4 grid gap-3 rounded-2xl border border-orange-100 bg-white p-4 text-sm shadow-soft">
         <label className="grid gap-2">
-          <span className="font-semibold text-slate-500">Receipt ID</span>
-          <input
-            value={receiptId}
-            onChange={(event) => setReceiptId(event.target.value)}
-            placeholder="UUID ของ wood_receipts ที่สร้างแล้ว"
-            className="h-12 rounded-2xl border border-slate-200 px-4 font-medium text-slate-900 outline-none focus:border-brand-primary"
-          />
+          <span className="font-semibold text-slate-500">Supplier</span>
+          <select
+            value={selectedSupplierId}
+            onChange={(event) => setSelectedSupplierId(event.target.value)}
+            disabled={isLoadingSuppliers || suppliers.length === 0}
+            className="h-12 rounded-2xl border border-slate-200 bg-white px-4 font-medium text-slate-900 outline-none focus:border-brand-primary disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            {suppliers.length === 0 ? <option value="">ไม่มี supplier</option> : null}
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name} ({supplier.supplier_code})
+              </option>
+            ))}
+          </select>
         </label>
+        <div className="flex justify-between"><span className="text-slate-500">Receipt</span><strong>สร้างอัตโนมัติ</strong></div>
         <div className="flex justify-between"><span className="text-slate-500">User</span><strong>ทีมรับไม้</strong></div>
         <div className="flex justify-between"><span className="text-slate-500">Date Time</span><strong>05 Jun 2026 08:30</strong></div>
         <div className="flex justify-between"><span className="text-slate-500">GPS</span><strong>รอตำแหน่ง</strong></div>
