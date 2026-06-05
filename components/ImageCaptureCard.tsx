@@ -13,20 +13,25 @@ type ImageCaptureCardProps = {
 
 export function ImageCaptureCard({ id, title, description, required, onReadyChange }: ImageCaptureCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
 
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
-  }, [previewUrl]);
+  }, []);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     const ready = Boolean(file);
 
-    setPreviewUrl(file ? URL.createObjectURL(file) : null);
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+
+    const nextPreviewUrl = file ? URL.createObjectURL(file) : null;
+    previewUrlRef.current = nextPreviewUrl;
+    setPreviewUrl(nextPreviewUrl);
     setFileName(file?.name || "");
     onReadyChange?.(id, ready);
   }
