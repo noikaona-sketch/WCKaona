@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const BUCKET_NAME = "wood-receipts";
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
-const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
+const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const PROMPT_VERSION = "receipt-vision-v1";
 const REQUIRED_IMAGE_TYPES = ["size", "moisture", "license"] as const;
 const MAX_WARNINGS = 10;
