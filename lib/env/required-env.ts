@@ -7,13 +7,12 @@ const commonEnvNames = [
   "N8N_WEBHOOK_URL",
 ] as const;
 
-const aiEnvNames = ["AI_PROVIDER", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] as const;
+const openAiEnvNames = ["OPENAI_API_KEY"] as const;
+const claudeEnvNames = ["ANTHROPIC_API_KEY", "ANTHROPIC_VISION_MODEL"] as const;
 
-export const envNames = [...commonEnvNames, ...aiEnvNames] as const;
-
-export type EnvName = (typeof envNames)[number];
+export type EnvName = (typeof commonEnvNames)[number] | (typeof openAiEnvNames)[number] | (typeof claudeEnvNames)[number];
 export type EnvPresenceStatus = "present" | "missing";
-export type EnvStatus = Record<EnvName, EnvPresenceStatus>;
+export type EnvStatus = Partial<Record<EnvName, EnvPresenceStatus>>;
 export type AiProvider = "openai" | "claude";
 
 function getAiProvider(): AiProvider {
@@ -21,12 +20,12 @@ function getAiProvider(): AiProvider {
   return provider === "claude" ? "claude" : "openai";
 }
 
-function getRequiredEnvNamesForProvider(provider = getAiProvider()) {
-  return [...commonEnvNames, provider === "claude" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"] as const;
+function getRequiredEnvNamesForProvider(provider = getAiProvider()): EnvName[] {
+  return [...commonEnvNames, ...(provider === "claude" ? claudeEnvNames : openAiEnvNames)];
 }
 
 export function getRequiredEnvStatus(): EnvStatus {
-  return envNames.reduce((status, envName) => {
+  return getRequiredEnvNamesForProvider().reduce((status, envName) => {
     status[envName] = process.env[envName]?.trim() ? "present" : "missing";
     return status;
   }, {} as EnvStatus);
