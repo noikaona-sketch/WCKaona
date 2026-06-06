@@ -6,6 +6,8 @@ export const requiredEnvNames = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "OPENAI_API_KEY",
   "N8N_WEBHOOK_URL",
+  "AI_PROVIDER",
+  "ANTHROPIC_API_KEY",
 ] as const;
 
 export type RequiredEnvName = (typeof requiredEnvNames)[number];
