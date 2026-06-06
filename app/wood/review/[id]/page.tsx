@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { BottomActionBar } from "@/components/BottomActionBar";
 import { MobileHeader } from "@/components/MobileHeader";
@@ -59,7 +59,8 @@ function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString("th-TH") : "-";
 }
 
-export default function ReviewDetailPage({ params }: { params: { id: string } }) {
+export default function ReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [receipt, setReceipt] = useState<ReceiptDetail | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [images, setImages] = useState<SignedImage[]>([]);
@@ -88,18 +89,18 @@ export default function ReviewDetailPage({ params }: { params: { id: string } })
           supabase
             .from("wood_receipts")
             .select("id, receipt_no, truck_plate, status, inbound_weight_kg, outbound_weight_kg, net_weight_kg, moisture_percent, final_grade, unloading_location, received_at")
-            .eq("id", params.id)
+            .eq("id", id)
             .is("deleted_at", null)
             .maybeSingle(),
           supabase
             .from("receipt_images")
             .select("image_type, file_path, file_name")
-            .eq("wood_receipt_id", params.id)
+            .eq("wood_receipt_id", id)
             .is("deleted_at", null),
           supabase
             .from("ai_analysis")
             .select("truck_plate, moisture_percent, estimated_log_count, estimated_diameter_min_cm, estimated_diameter_max_cm, wood_condition, suggested_grade, confidence, warnings")
-            .eq("wood_receipt_id", params.id)
+            .eq("wood_receipt_id", id)
             .is("deleted_at", null)
             .maybeSingle(),
         ]);
@@ -138,7 +139,7 @@ export default function ReviewDetailPage({ params }: { params: { id: string } })
     return () => {
       isMounted = false;
     };
-  }, [params.id]);
+  }, [id]);
 
   function handleReview(decision: "approved" | "rejected") {
     setReviewDecision(decision);
@@ -152,6 +153,7 @@ export default function ReviewDetailPage({ params }: { params: { id: string } })
           secondaryLabel="Reject"
           primaryDisabled={!receipt || !suggestedGrade.trim()}
           onPrimaryClick={() => handleReview("approved")}
+          onSecondaryClick={() => handleReview("rejected")}
         />
       }
     >
