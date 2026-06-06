@@ -37,6 +37,9 @@ jobs:
       - name: Initialize local Supabase config
         run: npx supabase init --force
 
+      - name: supabase start
+        run: npx supabase start
+
       - name: supabase db reset
         run: npx supabase db reset
 
@@ -55,6 +58,7 @@ jobs:
             echo "- npm install"
             echo "- Setup Supabase CLI"
             echo "- Initialize local Supabase config"
+            echo "- supabase start"
             echo "- supabase db reset"
             echo "- npm run typecheck"
             echo "- npm run build"
