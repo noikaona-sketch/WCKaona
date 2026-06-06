@@ -17,6 +17,7 @@ type ReviewReceipt = {
   receipt_no: string;
   truck_plate: string | null;
   status: string;
+  review_status: "pending" | "approved" | "rejected";
   inbound_weight_kg: number | null;
   moisture_percent: number | null;
   received_at: string | null;
@@ -52,8 +53,9 @@ export default function ReviewListPage() {
 
         const { data, error } = await supabase
           .from("wood_receipts")
-          .select("id, receipt_no, truck_plate, status, inbound_weight_kg, moisture_percent, received_at, ai_analysis(suggested_grade, confidence)")
+          .select("id, receipt_no, truck_plate, status, review_status, inbound_weight_kg, moisture_percent, received_at, ai_analysis(suggested_grade, confidence)")
           .is("deleted_at", null)
+          .eq("review_status", "pending")
           .order("created_at", { ascending: false })
           .limit(20);
 
