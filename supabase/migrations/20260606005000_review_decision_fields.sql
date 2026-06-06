@@ -1,5 +1,5 @@
 -- PR #13 Review Decision Persistence
--- Scope: add review decision fields and basic authenticated update policy for wood_receipts.
+-- Scope: add review decision fields to wood_receipts.
 -- Intentionally excludes n8n, LINE, AI calls, storage policy changes, and complex role systems.
 
 alter table public.wood_receipts
@@ -28,12 +28,5 @@ alter table public.wood_receipts
 alter table public.wood_receipts
   add constraint wood_receipts_reviewer_note_trimmed
   check (reviewer_note is null or reviewer_note = btrim(reviewer_note));
-
-create policy wood_receipts_update_review_authenticated
-  on public.wood_receipts
-  for update
-  to authenticated
-  using (deleted_at is null)
-  with check (deleted_at is null);
 
 create index wood_receipts_review_status_idx on public.wood_receipts(review_status);
