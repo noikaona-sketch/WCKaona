@@ -55,6 +55,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing receiptId" }, { status: 400 });
     }
 
+    const { data: receipt, error: receiptError } = await authClient
+      .from("wood_receipts")
+      .select("id")
+      .eq("id", receiptId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (receiptError) throw receiptError;
+    if (!receipt) {
+      return NextResponse.json({ error: "Receipt not found or not accessible" }, { status: 404 });
+    }
+
     const result = await analyzeReceiptImages(receiptId);
     return NextResponse.json(result);
   } catch (error) {
