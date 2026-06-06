@@ -7,6 +7,8 @@ const BUCKET_NAME = "wood-receipts";
 const DEFAULT_MODEL = "gpt-4.1-mini";
 const PROMPT_VERSION = "receipt-vision-v1";
 const REQUIRED_IMAGE_TYPES = ["size", "moisture", "license"] as const;
+const MAX_WARNINGS = 10;
+const MAX_WARNING_LENGTH = 200;
 
 export type ReceiptVisionAnalysisResult = {
   truck_plate: string;
@@ -58,24 +60,49 @@ function clampConfidence(value: unknown) {
   return Math.min(100, Math.max(0, Math.round(numberValue)));
 }
 
-function nullableNumber(value: unknown) {
+function boundedNumber(value: unknown, options?: { min?: number; max?: number; integer?: boolean }) {
   if (value === null || value === undefined || value === "") return null;
+
   const numberValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numberValue) ? numberValue : null;
+  if (!Number.isFinite(numberValue)) return null;
+  if (options?.min !== undefined && numberValue < options.min) return null;
+  if (options?.max !== undefined && numberValue > options.max) return null;
+
+  return options?.integer ? Math.round(numberValue) : numberValue;
+}
+
+function normalizeWarnings(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((warning): warning is string => typeof warning === "string")
+    .map((warning) => warning.trim().slice(0, MAX_WARNING_LENGTH))
+    .filter(Boolean)
+    .slice(0, MAX_WARNINGS);
 }
 
 function normalizeAnalysisResult(value: Partial<ReceiptVisionAnalysisResult>): ReceiptVisionAnalysisResult {
   return {
     truck_plate: typeof value.truck_plate === "string" ? value.truck_plate.trim() : "",
-    moisture_percent: nullableNumber(value.moisture_percent),
-    estimated_log_count: nullableNumber(value.estimated_log_count),
-    estimated_diameter_min_cm: nullableNumber(value.estimated_diameter_min_cm),
-    estimated_diameter_max_cm: nullableNumber(value.estimated_diameter_max_cm),
+    moisture_percent: boundedNumber(value.moisture_percent, { min: 0, max: 100 }),
+    estimated_log_count: boundedNumber(value.estimated_log_count, { min: 0, integer: true }),
+    estimated_diameter_min_cm: boundedNumber(value.estimated_diameter_min_cm, { min: 0 }),
+    estimated_diameter_max_cm: boundedNumber(value.estimated_diameter_max_cm, { min: 0 }),
     wood_condition: typeof value.wood_condition === "string" ? value.wood_condition.trim() : "",
     suggested_grade: typeof value.suggested_grade === "string" ? value.suggested_grade.trim() : "",
     confidence: clampConfidence(value.confidence),
-    warnings: Array.isArray(value.warnings) ? value.warnings.filter((warning): warning is string => typeof warning === "string") : [],
+    warnings: normalizeWarnings(value.warnings),
   };
+}
+
+function parseVisionJson(responseText: string) {
+  if (!responseText) return emptyResult;
+
+  try {
+    return JSON.parse(responseText) as Partial<ReceiptVisionAnalysisResult>;
+  } catch {
+    throw new Error("Vision AI returned invalid JSON");
+  }
 }
 
 function extractResponseText(responseJson: OpenAIResponseBody) {
@@ -204,8 +231,7 @@ async function requestVisionAnalysis(imageDataUrls: Array<{ imageType: string; i
   const responseJson = (await response.json()) as OpenAIResponseBody;
   if (!response.ok) throw new Error(getOpenAIErrorMessage(responseJson.error));
 
-  const responseText = extractResponseText(responseJson);
-  const parsedResult = responseText ? (JSON.parse(responseText) as Partial<ReceiptVisionAnalysisResult>) : emptyResult;
+  const parsedResult = parseVisionJson(extractResponseText(responseJson));
 
   return {
     rawResponse: responseJson,
