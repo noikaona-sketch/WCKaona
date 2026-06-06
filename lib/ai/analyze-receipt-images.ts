@@ -5,7 +5,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const BUCKET_NAME = "wood-receipts";
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
-const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const PROMPT_VERSION = "receipt-vision-v1";
 const REQUIRED_IMAGE_TYPES = ["size", "moisture", "license"] as const;
 const MAX_WARNINGS = 10;
@@ -305,7 +304,9 @@ async function requestClaudeVisionAnalysis(imageDataUrls: ImageDataUrl[]): Promi
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
 
-  const modelName = process.env.ANTHROPIC_VISION_MODEL || DEFAULT_ANTHROPIC_MODEL;
+  const modelName = process.env.ANTHROPIC_VISION_MODEL;
+  if (!modelName) throw new Error("Missing ANTHROPIC_VISION_MODEL");
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
