@@ -8,6 +8,7 @@ alter table public.wood_receipts
 
 alter table public.wood_receipts
   add constraint wood_receipts_n8n_dispatch_status_allowed
-  check (n8n_dispatch_status is null or n8n_dispatch_status in ('dispatched'));
+  check (n8n_dispatch_status is null or n8n_dispatch_status in ('dispatching', 'dispatched', 'failed'));
 
 create index wood_receipts_n8n_dispatched_at_idx on public.wood_receipts(n8n_dispatched_at);
+create index wood_receipts_n8n_dispatch_status_idx on public.wood_receipts(n8n_dispatch_status);
