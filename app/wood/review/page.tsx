@@ -7,6 +7,11 @@ import { MobileHeader } from "@/components/MobileHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
+type ReviewAnalysis = {
+  suggested_grade: string | null;
+  confidence: number | null;
+};
+
 type ReviewReceipt = {
   id: string;
   receipt_no: string;
@@ -15,14 +20,16 @@ type ReviewReceipt = {
   inbound_weight_kg: number | null;
   moisture_percent: number | null;
   received_at: string | null;
-  ai_analysis: Array<{
-    suggested_grade: string | null;
-    confidence: number | null;
-  }>;
+  ai_analysis: ReviewAnalysis | ReviewAnalysis[] | null;
 };
 
 function formatNumber(value: number | null) {
   return value === null ? "-" : value.toLocaleString();
+}
+
+function getAnalysis(value: ReviewReceipt["ai_analysis"]) {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
 }
 
 export default function ReviewListPage() {
@@ -74,7 +81,7 @@ export default function ReviewListPage() {
       <div className="space-y-4">
         {message ? <p className="rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500 shadow-soft">{message}</p> : null}
         {receipts.map((receipt) => {
-          const analysis = receipt.ai_analysis[0];
+          const analysis = getAnalysis(receipt.ai_analysis);
 
           return (
             <Link key={receipt.id} href={`/wood/review/${receipt.id}`} className="block rounded-2xl bg-white p-4 shadow-soft">
