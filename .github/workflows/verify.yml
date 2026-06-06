@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   verify:
-    name: npm install, typecheck, and build
+    name: supabase reset, typecheck, and build
     runs-on: ubuntu-latest
     env:
       CI: true
@@ -31,6 +31,12 @@ jobs:
       - name: npm install
         run: npm install
 
+      - name: Setup Supabase CLI
+        run: npm install --no-save supabase
+
+      - name: supabase db reset
+        run: npx supabase db reset
+
       - name: npm run typecheck
         run: npm run typecheck
 
@@ -44,6 +50,8 @@ jobs:
             echo "## Verification passed"
             echo ""
             echo "- npm install"
+            echo "- Setup Supabase CLI"
+            echo "- supabase db reset"
             echo "- npm run typecheck"
             echo "- npm run build"
           } >> "$GITHUB_STEP_SUMMARY"
