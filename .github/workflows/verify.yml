@@ -62,4 +62,5 @@ jobs:
             echo "- supabase db reset"
             echo "- npm run typecheck"
             echo "- npm run build"
+            echo "- No Supabase project link or production secrets"
           } >> "$GITHUB_STEP_SUMMARY"
