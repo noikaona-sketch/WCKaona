@@ -90,10 +90,21 @@ export async function uploadReceiptImages({
     });
   }
 
+  const { error: upsertError } = await supabase
+    .from("receipt_images")
+    .upsert(uploadedRows, {
+      onConflict: "wood_receipt_id,image_type",
+      ignoreDuplicates: true,
+    });
+
+  if (upsertError) throw upsertError;
+
+  const imageTypes = uploadedRows.map((row) => row.image_type);
   const { data, error } = await supabase
     .from("receipt_images")
-    .insert(uploadedRows)
-    .select("id, image_type, file_path");
+    .select("id, image_type, file_path")
+    .eq("wood_receipt_id", receiptId)
+    .in("image_type", imageTypes);
 
   if (error) throw error;
 
