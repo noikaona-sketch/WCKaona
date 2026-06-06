@@ -57,6 +57,16 @@ type SignedImage = ReceiptImage & {
   signedUrl: string;
 };
 
+type ReviewSaveResponse = {
+  id: string;
+  review_status: ReviewStatus;
+  reviewed_grade: string | null;
+  reviewer_note: string | null;
+  reviewed_at: string | null;
+  error?: string;
+  detail?: string;
+};
+
 function formatNumber(value: number | null | undefined, suffix = "") {
   return value === null || value === undefined ? "-" : `${value.toLocaleString()}${suffix}`;
 }
@@ -172,49 +182,29 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
 
     try {
       const supabase = createBrowserSupabaseClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-      if (userError) throw userError;
-      if (!userData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนบันทึกผล review");
+      if (sessionError) throw sessionError;
+      if (!sessionData.session?.access_token) throw new Error("กรุณาเข้าสู่ระบบก่อนบันทึกผล review");
 
-      const reviewedAt = new Date().toISOString();
-      const updatePayload = {
-        review_status: decision,
-        reviewed_grade: trimmedGrade || null,
-        reviewer_note: trimmedNote || null,
-        reviewed_at: reviewedAt,
-        reviewed_by: userData.user.id,
-      };
-
-      const { data, error } = await supabase
-        .from("wood_receipts")
-        .update(updatePayload)
-        .eq("id", receipt.id)
-        .is("deleted_at", null)
-        .select("id, review_status, reviewed_grade, reviewer_note, reviewed_at")
-        .single();
-
-      if (error) throw error;
-
-      const { error: auditError } = await supabase.from("audit_logs").insert({
-        wood_receipt_id: receipt.id,
-        actor_id: userData.user.id,
-        action: decision === "approved" ? "review_approved" : "review_rejected",
-        entity_type: "wood_receipts",
-        entity_id: receipt.id,
-        before_data: {
-          review_status: receipt.review_status,
-          reviewed_grade: receipt.reviewed_grade,
-          reviewer_note: receipt.reviewer_note,
-          reviewed_at: receipt.reviewed_at,
+      const response = await fetch("/api/review/decision", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
         },
-        after_data: updatePayload,
-        metadata: { source: "review_screen" },
+        body: JSON.stringify({
+          receiptId: receipt.id,
+          reviewStatus: decision,
+          reviewedGrade: trimmedGrade,
+          reviewerNote: trimmedNote,
+        }),
       });
 
-      if (auditError) throw auditError;
+      const responseBody = (await response.json()) as ReviewSaveResponse;
+      if (!response.ok) throw new Error(responseBody.detail || responseBody.error || "บันทึกผล review ไม่สำเร็จ");
 
-      setReceipt((current) => current ? { ...current, ...(data as Pick<ReceiptDetail, "review_status" | "reviewed_grade" | "reviewer_note" | "reviewed_at">) } : current);
+      setReceipt((current) => current ? { ...current, ...responseBody } : current);
       setReviewDecision(decision);
       setReviewerNote(trimmedNote);
       setSuggestedGrade(trimmedGrade);
