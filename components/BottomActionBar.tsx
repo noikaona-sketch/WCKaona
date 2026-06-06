@@ -4,13 +4,18 @@ type BottomActionBarProps = {
   primaryDisabled?: boolean;
   primaryLoading?: boolean;
   onPrimaryClick?: () => void;
+  onSecondaryClick?: () => void;
 };
 
-export function BottomActionBar({ primaryLabel, secondaryLabel, primaryDisabled, primaryLoading, onPrimaryClick }: BottomActionBarProps) {
+export function BottomActionBar({ primaryLabel, secondaryLabel, primaryDisabled, primaryLoading, onPrimaryClick, onSecondaryClick }: BottomActionBarProps) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/95 p-4 backdrop-blur">
       <div className="mx-auto flex max-w-md gap-3">
-        {secondaryLabel ? <button className="h-12 flex-1 rounded-2xl border border-slate-200 font-semibold text-slate-700">{secondaryLabel}</button> : null}
+        {secondaryLabel ? (
+          <button type="button" onClick={onSecondaryClick} className="h-12 flex-1 rounded-2xl border border-slate-200 font-semibold text-slate-700">
+            {secondaryLabel}
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={primaryDisabled || primaryLoading}
