@@ -20,6 +20,8 @@ type ReceiptRow = {
   reviewed_at: string | null;
   unloading_location: string | null;
   review_status: string;
+  n8n_dispatched_at: string | null;
+  n8n_dispatch_status: string | null;
 };
 
 type AnalysisRow = Record<string, unknown> | null;
@@ -33,6 +35,13 @@ type ImageRow = {
   file_size_bytes: number | null;
   captured_at: string | null;
 };
+
+type DispatchImage = ImageRow & {
+  signed_url: string;
+  signed_url_expires_in_seconds: number;
+};
+
+const IMAGE_SIGNED_URL_TTL_SECONDS = 10 * 60;
 
 function createUserScopedClient(accessToken: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -68,7 +77,7 @@ function getReceiptId(value: unknown) {
   return typeof body.receiptId === "string" ? body.receiptId.trim() : "";
 }
 
-function buildPayload(receipt: ReceiptRow, aiAnalysis: AnalysisRow, images: ImageRow[]): N8nApprovedReceiptPayload {
+function buildPayload(receipt: ReceiptRow, aiAnalysis: AnalysisRow, images: DispatchImage[]): N8nApprovedReceiptPayload {
   return {
     receipt_id: receipt.id,
     receipt_no: receipt.receipt_no,
@@ -85,7 +94,28 @@ function buildPayload(receipt: ReceiptRow, aiAnalysis: AnalysisRow, images: Imag
   };
 }
 
+async function buildSignedImages(serverClient: ReturnType<typeof createServerSupabaseClient>, images: ImageRow[]) {
+  return Promise.all(
+    images.map(async (image) => {
+      const { data, error } = await serverClient.storage
+        .from("wood-receipts")
+        .createSignedUrl(image.file_path, IMAGE_SIGNED_URL_TTL_SECONDS);
+
+      if (error) throw error;
+
+      return {
+        ...image,
+        signed_url: data.signedUrl,
+        signed_url_expires_in_seconds: IMAGE_SIGNED_URL_TTL_SECONDS,
+      };
+    }),
+  );
+}
+
 export async function POST(request: Request) {
+  const serverClient = createServerSupabaseClient();
+  let claimedReceiptId = "";
+
   try {
     const accessToken = getBearerToken(request);
     if (!accessToken) {
@@ -114,14 +144,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Receipt not found or not accessible" }, { status: 404 });
     }
 
-    const serverClient = createServerSupabaseClient();
-    const [receiptResult, analysisResult, imagesResult] = await Promise.all([
-      serverClient
-        .from("wood_receipts")
-        .select("id, receipt_no, supplier_id, truck_plate, net_weight_kg, moisture_percent, reviewed_grade, reviewer_note, reviewed_at, unloading_location, review_status")
-        .eq("id", receiptId)
-        .is("deleted_at", null)
-        .single(),
+    const { data: claimedReceipt, error: claimError } = await serverClient
+      .from("wood_receipts")
+      .update({ n8n_dispatch_status: "dispatching" })
+      .eq("id", receiptId)
+      .eq("review_status", "approved")
+      .is("n8n_dispatched_at", null)
+      .or("n8n_dispatch_status.is.null,n8n_dispatch_status.eq.failed")
+      .is("deleted_at", null)
+      .select("id, receipt_no, supplier_id, truck_plate, net_weight_kg, moisture_percent, reviewed_grade, reviewer_note, reviewed_at, unloading_location, review_status, n8n_dispatched_at, n8n_dispatch_status")
+      .maybeSingle();
+
+    if (claimError) throw claimError;
+    if (!claimedReceipt) {
+      return NextResponse.json(
+        { error: "Receipt must be approved and not already dispatched before n8n dispatch" },
+        { status: 409 },
+      );
+    }
+
+    claimedReceiptId = receiptId;
+
+    const [analysisResult, imagesResult] = await Promise.all([
       serverClient
         .from("ai_analysis")
         .select("truck_plate, moisture_percent, estimated_log_count, estimated_diameter_min_cm, estimated_diameter_max_cm, wood_condition, suggested_grade, confidence, warnings, summary")
@@ -136,17 +180,22 @@ export async function POST(request: Request) {
         .order("image_type", { ascending: true }),
     ]);
 
-    if (receiptResult.error) throw receiptResult.error;
     if (analysisResult.error) throw analysisResult.error;
     if (imagesResult.error) throw imagesResult.error;
 
-    const receipt = receiptResult.data as ReceiptRow;
-    if (receipt.review_status !== "approved") {
-      return NextResponse.json({ error: "Receipt must be approved before n8n dispatch" }, { status: 409 });
-    }
-
-    const payload = buildPayload(receipt, analysisResult.data as AnalysisRow, (imagesResult.data ?? []) as ImageRow[]);
+    const signedImages = await buildSignedImages(serverClient, (imagesResult.data ?? []) as ImageRow[]);
+    const payload = buildPayload(claimedReceipt as ReceiptRow, analysisResult.data as AnalysisRow, signedImages);
     const dispatchResult = await dispatchApprovedReceiptToN8n(payload);
+    const dispatchedAt = new Date().toISOString();
+
+    const { error: markDispatchedError } = await serverClient
+      .from("wood_receipts")
+      .update({ n8n_dispatched_at: dispatchedAt, n8n_dispatch_status: "dispatched" })
+      .eq("id", receiptId)
+      .eq("n8n_dispatch_status", "dispatching")
+      .is("deleted_at", null);
+
+    if (markDispatchedError) throw markDispatchedError;
 
     const { error: auditError } = await serverClient.from("audit_logs").insert({
       wood_receipt_id: receiptId,
@@ -160,6 +209,7 @@ export async function POST(request: Request) {
         source: "n8n_dispatch_api",
         webhook_status: dispatchResult.status,
         webhook_response: dispatchResult.responseText.slice(0, 500),
+        n8n_dispatched_at: dispatchedAt,
       },
     });
 
@@ -173,8 +223,17 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ dispatched: true, receipt_id: receiptId });
+    return NextResponse.json({ dispatched: true, receipt_id: receiptId, n8n_dispatched_at: dispatchedAt });
   } catch (error) {
+    if (claimedReceiptId) {
+      await serverClient
+        .from("wood_receipts")
+        .update({ n8n_dispatch_status: "failed" })
+        .eq("id", claimedReceiptId)
+        .eq("n8n_dispatch_status", "dispatching")
+        .is("n8n_dispatched_at", null);
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "n8n dispatch failed" },
       { status: 500 },
