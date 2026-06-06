@@ -4,11 +4,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const BUCKET_NAME = "wood-receipts";
-const DEFAULT_MODEL = "gpt-4.1-mini";
+const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
+const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 const PROMPT_VERSION = "receipt-vision-v1";
 const REQUIRED_IMAGE_TYPES = ["size", "moisture", "license"] as const;
 const MAX_WARNINGS = 10;
 const MAX_WARNING_LENGTH = 200;
+const ANALYSIS_PROMPT =
+  "Analyze these wood receipt images and return JSON only. Use null when a number cannot be read confidently. Do not include markdown.";
+
+type AiProvider = "openai" | "claude";
 
 export type ReceiptVisionAnalysisResult = {
   truck_plate: string;
@@ -28,6 +33,20 @@ type ReceiptImageRow = {
   mime_type: string | null;
 };
 
+type ImageDataUrl = {
+  imageType: string;
+  imageUrl: string;
+  mimeType: string;
+  base64Data: string;
+};
+
+type VisionProviderResult = {
+  provider: AiProvider;
+  modelName: string;
+  rawResponse: unknown;
+  result: ReceiptVisionAnalysisResult;
+};
+
 type OpenAIResponseContent = {
   text?: unknown;
 };
@@ -42,6 +61,43 @@ type OpenAIResponseBody = {
   error?: { message?: string } | string;
 };
 
+type AnthropicResponseContent = {
+  type?: unknown;
+  text?: unknown;
+};
+
+type AnthropicResponseBody = {
+  content?: AnthropicResponseContent[];
+  error?: { message?: string } | string;
+};
+
+const receiptAnalysisJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    truck_plate: { type: "string" },
+    moisture_percent: { type: ["number", "null"] },
+    estimated_log_count: { type: ["number", "null"] },
+    estimated_diameter_min_cm: { type: ["number", "null"] },
+    estimated_diameter_max_cm: { type: ["number", "null"] },
+    wood_condition: { type: "string" },
+    suggested_grade: { type: "string" },
+    confidence: { type: "number", minimum: 0, maximum: 100 },
+    warnings: { type: "array", items: { type: "string" } },
+  },
+  required: [
+    "truck_plate",
+    "moisture_percent",
+    "estimated_log_count",
+    "estimated_diameter_min_cm",
+    "estimated_diameter_max_cm",
+    "wood_condition",
+    "suggested_grade",
+    "confidence",
+    "warnings",
+  ],
+};
+
 const emptyResult: ReceiptVisionAnalysisResult = {
   truck_plate: "",
   moisture_percent: null,
@@ -53,6 +109,12 @@ const emptyResult: ReceiptVisionAnalysisResult = {
   confidence: 0,
   warnings: [],
 };
+
+function getAiProvider(): AiProvider {
+  const provider = (process.env.AI_PROVIDER || "openai").trim().toLowerCase();
+  if (provider === "openai" || provider === "claude") return provider;
+  throw new Error("Invalid AI_PROVIDER. Use openai or claude.");
+}
 
 function clampConfidence(value: unknown) {
   const numberValue = typeof value === "number" ? value : Number(value);
@@ -105,7 +167,7 @@ function parseVisionJson(responseText: string) {
   }
 }
 
-function extractResponseText(responseJson: OpenAIResponseBody) {
+function extractOpenAIResponseText(responseJson: OpenAIResponseBody) {
   if (typeof responseJson.output_text === "string") return responseJson.output_text;
   if (!Array.isArray(responseJson.output)) return "";
 
@@ -116,13 +178,30 @@ function extractResponseText(responseJson: OpenAIResponseBody) {
     .trim();
 }
 
-function getOpenAIErrorMessage(error: OpenAIResponseBody["error"]) {
-  if (typeof error === "string") return error;
-  if (error?.message) return error.message;
-  return "Vision AI request failed";
+function extractAnthropicResponseText(responseJson: AnthropicResponseBody) {
+  if (!Array.isArray(responseJson.content)) return "";
+
+  return responseJson.content
+    .filter((contentItem) => contentItem.type === "text")
+    .map((contentItem) => (typeof contentItem.text === "string" ? contentItem.text : ""))
+    .join("\n")
+    .trim();
 }
 
-async function blobToDataUrl(blob: Blob, mimeType: string) {
+function getProviderErrorMessage(error: OpenAIResponseBody["error"] | AnthropicResponseBody["error"], fallback: string) {
+  if (typeof error === "string") return error;
+  if (error?.message) return error.message;
+  return fallback;
+}
+
+function splitDataUrl(dataUrl: string, fallbackMimeType: string) {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return { mimeType: fallbackMimeType, base64Data: dataUrl };
+
+  return { mimeType: match[1] || fallbackMimeType, base64Data: match[2] || "" };
+}
+
+async function blobToImageDataUrl(blob: Blob, mimeType: string): Promise<ImageDataUrl["imageUrl"]> {
   const buffer = Buffer.from(await blob.arrayBuffer());
   return `data:${mimeType};base64,${buffer.toString("base64")}`;
 }
@@ -152,21 +231,28 @@ async function fetchReceiptImages(supabase: SupabaseClient, receiptId: string) {
 async function downloadReceiptImageDataUrls(supabase: SupabaseClient, images: ReceiptImageRow[]) {
   return Promise.all(
     images.map(async (image) => {
+      const mimeType = image.mime_type || "image/jpeg";
       const { data, error } = await supabase.storage.from(BUCKET_NAME).download(image.file_path);
       if (error) throw error;
 
+      const imageUrl = await blobToImageDataUrl(data, mimeType);
+      const { base64Data } = splitDataUrl(imageUrl, mimeType);
+
       return {
         imageType: image.image_type,
-        imageUrl: await blobToDataUrl(data, image.mime_type || "image/jpeg"),
+        imageUrl,
+        mimeType,
+        base64Data,
       };
     }),
   );
 }
 
-async function requestVisionAnalysis(imageDataUrls: Array<{ imageType: string; imageUrl: string }>) {
+async function requestOpenAIVisionAnalysis(imageDataUrls: ImageDataUrl[]): Promise<VisionProviderResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
+  const modelName = process.env.OPENAI_VISION_MODEL || DEFAULT_OPENAI_MODEL;
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -174,15 +260,14 @@ async function requestVisionAnalysis(imageDataUrls: Array<{ imageType: string; i
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_VISION_MODEL || DEFAULT_MODEL,
+      model: modelName,
       input: [
         {
           role: "user",
           content: [
             {
               type: "input_text",
-              text:
-                "Analyze these wood receipt images and return JSON only. Use null when a number cannot be read confidently. Do not include markdown.",
+              text: ANALYSIS_PROMPT,
             },
             ...imageDataUrls.map((image) => ({
               type: "input_image",
@@ -197,59 +282,93 @@ async function requestVisionAnalysis(imageDataUrls: Array<{ imageType: string; i
           type: "json_schema",
           name: "receipt_vision_analysis",
           strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              truck_plate: { type: "string" },
-              moisture_percent: { type: ["number", "null"] },
-              estimated_log_count: { type: ["number", "null"] },
-              estimated_diameter_min_cm: { type: ["number", "null"] },
-              estimated_diameter_max_cm: { type: ["number", "null"] },
-              wood_condition: { type: "string" },
-              suggested_grade: { type: "string" },
-              confidence: { type: "number", minimum: 0, maximum: 100 },
-              warnings: { type: "array", items: { type: "string" } },
-            },
-            required: [
-              "truck_plate",
-              "moisture_percent",
-              "estimated_log_count",
-              "estimated_diameter_min_cm",
-              "estimated_diameter_max_cm",
-              "wood_condition",
-              "suggested_grade",
-              "confidence",
-              "warnings",
-            ],
-          },
+          schema: receiptAnalysisJsonSchema,
         },
       },
     }),
   });
 
   const responseJson = (await response.json()) as OpenAIResponseBody;
-  if (!response.ok) throw new Error(getOpenAIErrorMessage(responseJson.error));
+  if (!response.ok) throw new Error(getProviderErrorMessage(responseJson.error, "OpenAI Vision request failed"));
 
-  const parsedResult = parseVisionJson(extractResponseText(responseJson));
+  const parsedResult = parseVisionJson(extractOpenAIResponseText(responseJson));
 
   return {
+    provider: "openai",
+    modelName,
     rawResponse: responseJson,
     result: normalizeAnalysisResult(parsedResult),
   };
+}
+
+async function requestClaudeVisionAnalysis(imageDataUrls: ImageDataUrl[]): Promise<VisionProviderResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
+
+  const modelName = process.env.ANTHROPIC_VISION_MODEL || DEFAULT_ANTHROPIC_MODEL;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: modelName,
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `${ANALYSIS_PROMPT}\n\nReturn exactly this JSON shape with no extra keys: ${JSON.stringify(emptyResult)}`,
+            },
+            ...imageDataUrls.map((image) => ({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: image.mimeType,
+                data: image.base64Data,
+              },
+            })),
+          ],
+        },
+      ],
+    }),
+  });
+
+  const responseJson = (await response.json()) as AnthropicResponseBody;
+  if (!response.ok) throw new Error(getProviderErrorMessage(responseJson.error, "Claude Vision request failed"));
+
+  const parsedResult = parseVisionJson(extractAnthropicResponseText(responseJson));
+
+  return {
+    provider: "claude",
+    modelName,
+    rawResponse: responseJson,
+    result: normalizeAnalysisResult(parsedResult),
+  };
+}
+
+async function requestVisionAnalysis(imageDataUrls: ImageDataUrl[]) {
+  const provider = getAiProvider();
+
+  if (provider === "claude") return requestClaudeVisionAnalysis(imageDataUrls);
+  return requestOpenAIVisionAnalysis(imageDataUrls);
 }
 
 export async function analyzeReceiptImages(receiptId: string): Promise<ReceiptVisionAnalysisResult> {
   const supabase = createServerSupabaseClient();
   const images = await fetchReceiptImages(supabase, receiptId);
   const imageDataUrls = await downloadReceiptImageDataUrls(supabase, images);
-  const { rawResponse, result } = await requestVisionAnalysis(imageDataUrls);
+  const { provider, modelName, rawResponse, result } = await requestVisionAnalysis(imageDataUrls);
 
   const { error } = await supabase.from("ai_analysis").upsert(
     {
       wood_receipt_id: receiptId,
-      model_name: process.env.OPENAI_VISION_MODEL || DEFAULT_MODEL,
-      prompt_version: PROMPT_VERSION,
+      model_name: modelName,
+      prompt_version: `${PROMPT_VERSION}-${provider}`,
       truck_plate: result.truck_plate,
       moisture_percent: result.moisture_percent,
       estimated_log_count: result.estimated_log_count,
@@ -259,7 +378,7 @@ export async function analyzeReceiptImages(receiptId: string): Promise<ReceiptVi
       suggested_grade: result.suggested_grade,
       confidence: result.confidence,
       warnings: result.warnings,
-      raw_response: rawResponse,
+      raw_response: { provider, response: rawResponse },
       summary: null,
     },
     { onConflict: "wood_receipt_id" },
