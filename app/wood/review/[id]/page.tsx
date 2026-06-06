@@ -15,6 +15,8 @@ const imageLabels: Record<string, string> = {
   size: "ไม้บนรถ + PVC",
 };
 
+type ReviewStatus = "pending" | "approved" | "rejected";
+
 type ReceiptDetail = {
   id: string;
   receipt_no: string;
@@ -26,6 +28,10 @@ type ReceiptDetail = {
   moisture_percent: number | null;
   final_grade: string | null;
   unloading_location: string | null;
+  review_status: ReviewStatus;
+  reviewed_grade: string | null;
+  reviewer_note: string | null;
+  reviewed_at: string | null;
   received_at: string | null;
 };
 
@@ -51,6 +57,16 @@ type SignedImage = ReceiptImage & {
   signedUrl: string;
 };
 
+type ReviewSaveResponse = {
+  id: string;
+  review_status: ReviewStatus;
+  reviewed_grade: string | null;
+  reviewer_note: string | null;
+  reviewed_at: string | null;
+  error?: string;
+  detail?: string;
+};
+
 function formatNumber(value: number | null | undefined, suffix = "") {
   return value === null || value === undefined ? "-" : `${value.toLocaleString()}${suffix}`;
 }
@@ -67,6 +83,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
   const [suggestedGrade, setSuggestedGrade] = useState("");
   const [reviewerNote, setReviewerNote] = useState("");
   const [reviewDecision, setReviewDecision] = useState<"approved" | "rejected" | "">("");
+  const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("กำลังโหลดผลตรวจ");
 
   const warnings = useMemo(() => analysis?.warnings ?? [], [analysis]);
@@ -88,7 +105,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
         const [receiptResult, imageResult, analysisResult] = await Promise.all([
           supabase
             .from("wood_receipts")
-            .select("id, receipt_no, truck_plate, status, inbound_weight_kg, outbound_weight_kg, net_weight_kg, moisture_percent, final_grade, unloading_location, received_at")
+            .select("id, receipt_no, truck_plate, status, inbound_weight_kg, outbound_weight_kg, net_weight_kg, moisture_percent, final_grade, unloading_location, review_status, reviewed_grade, reviewer_note, reviewed_at, received_at")
             .eq("id", id)
             .is("deleted_at", null)
             .maybeSingle(),
@@ -122,11 +139,14 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
         );
 
         if (isMounted) {
+          const loadedReceipt = receiptResult.data as ReceiptDetail;
           const loadedAnalysis = analysisResult.data as Analysis | null;
-          setReceipt(receiptResult.data as ReceiptDetail);
+          setReceipt(loadedReceipt);
           setImages(signedImages);
           setAnalysis(loadedAnalysis);
-          setSuggestedGrade(loadedAnalysis?.suggested_grade || receiptResult.data.final_grade || "");
+          setSuggestedGrade(loadedReceipt.reviewed_grade || loadedAnalysis?.suggested_grade || loadedReceipt.final_grade || "");
+          setReviewerNote(loadedReceipt.reviewer_note || "");
+          setReviewDecision(loadedReceipt.review_status === "approved" || loadedReceipt.review_status === "rejected" ? loadedReceipt.review_status : "");
           setMessage("");
         }
       } catch (error) {
@@ -141,8 +161,59 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
     };
   }, [id]);
 
-  function handleReview(decision: "approved" | "rejected") {
-    setReviewDecision(decision);
+  async function handleReview(decision: "approved" | "rejected") {
+    if (!receipt || isSaving) return;
+
+    const trimmedGrade = suggestedGrade.trim();
+    const trimmedNote = reviewerNote.trim();
+
+    if (decision === "approved" && !trimmedGrade) {
+      setMessage("กรุณาระบุ grade ก่อน Approve");
+      return;
+    }
+
+    if (decision === "rejected" && !trimmedNote) {
+      setMessage("กรุณาระบุ reviewer note ก่อน Reject");
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage("");
+
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+      if (!sessionData.session?.access_token) throw new Error("กรุณาเข้าสู่ระบบก่อนบันทึกผล review");
+
+      const response = await fetch("/api/review/decision", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receiptId: receipt.id,
+          reviewStatus: decision,
+          reviewedGrade: trimmedGrade,
+          reviewerNote: trimmedNote,
+        }),
+      });
+
+      const responseBody = (await response.json()) as ReviewSaveResponse;
+      if (!response.ok) throw new Error(responseBody.detail || responseBody.error || "บันทึกผล review ไม่สำเร็จ");
+
+      setReceipt((current) => current ? { ...current, ...responseBody } : current);
+      setReviewDecision(decision);
+      setReviewerNote(trimmedNote);
+      setSuggestedGrade(trimmedGrade);
+      setMessage(decision === "approved" ? "บันทึกผล Approve แล้ว" : "บันทึกผล Reject แล้ว");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "บันทึกผล review ไม่สำเร็จ");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -151,7 +222,8 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
         <BottomActionBar
           primaryLabel="Approve"
           secondaryLabel="Reject"
-          primaryDisabled={!receipt || !suggestedGrade.trim()}
+          primaryDisabled={!receipt || !suggestedGrade.trim() || isSaving}
+          primaryLoading={isSaving}
           onPrimaryClick={() => handleReview("approved")}
           onSecondaryClick={() => handleReview("rejected")}
         />
@@ -176,6 +248,8 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
               <div><dt className="text-slate-500">รับเข้า</dt><dd className="font-semibold text-slate-900">{formatDate(receipt.received_at)}</dd></div>
               <div><dt className="text-slate-500">Gross</dt><dd className="font-semibold text-slate-900">{formatNumber(receipt.inbound_weight_kg, " kg")}</dd></div>
               <div><dt className="text-slate-500">Unload</dt><dd className="font-semibold text-slate-900">{receipt.unloading_location || "-"}</dd></div>
+              <div><dt className="text-slate-500">Review</dt><dd className="font-semibold text-slate-900">{receipt.review_status}</dd></div>
+              <div><dt className="text-slate-500">Reviewed</dt><dd className="font-semibold text-slate-900">{formatDate(receipt.reviewed_at)}</dd></div>
             </dl>
           </section>
 
@@ -213,7 +287,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
           </section>
 
           <section className="rounded-2xl bg-white p-4 shadow-soft">
-            <label className="text-sm font-semibold text-slate-700" htmlFor="final-grade">Suggested Grade</label>
+            <label className="text-sm font-semibold text-slate-700" htmlFor="final-grade">Reviewed Grade</label>
             <input
               id="final-grade"
               value={suggestedGrade}
@@ -227,12 +301,13 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
               onChange={(event) => setReviewerNote(event.target.value.slice(0, 300))}
               rows={4}
               className="mt-2 w-full rounded-2xl border border-slate-200 p-4 outline-none focus:border-brand-primary"
-              placeholder="ระบุเหตุผลเมื่อต้องแก้เกรดหรือ Reject"
+              placeholder="ต้องระบุเมื่อ Reject"
             />
             <button
               type="button"
               onClick={() => handleReview("rejected")}
-              className="mt-3 h-12 w-full rounded-2xl border border-brand-danger font-semibold text-brand-danger"
+              disabled={isSaving}
+              className="mt-3 h-12 w-full rounded-2xl border border-brand-danger font-semibold text-brand-danger disabled:border-slate-300 disabled:text-slate-400"
             >
               Reject
             </button>
