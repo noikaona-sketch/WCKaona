@@ -14,6 +14,9 @@ type ReceiptRow = {
   n8n_dispatch_status: "dispatching" | "dispatched" | "failed" | string | null;
   received_at: string | null;
   reviewed_at: string | null;
+  created_by_name: string | null;
+  reviewed_by_name: string | null;
+  unloaded_by_name: string | null;
   ai_analysis: Array<{ id: string }> | null;
 };
 
@@ -70,7 +73,7 @@ export default function AdminStatusPage() {
         const { data, error } = await supabase
           .from("wood_receipts")
           .select(
-            "id, receipt_no, truck_plate, review_status, n8n_dispatch_status, received_at, reviewed_at, ai_analysis(id)",
+            "id, receipt_no, truck_plate, review_status, n8n_dispatch_status, received_at, reviewed_at, created_by_name, reviewed_by_name, unloaded_by_name, ai_analysis(id)",
           )
           .is("deleted_at", null)
           .order("created_at", { ascending: false })
@@ -152,7 +155,10 @@ export default function AdminStatusPage() {
                 <tr>
                   <th className="px-4 py-3">receipt_no</th>
                   <th className="px-4 py-3">truck_plate</th>
+                  <th className="px-4 py-3">created_by_name</th>
                   <th className="px-4 py-3">review_status</th>
+                  <th className="px-4 py-3">reviewed_by_name</th>
+                  <th className="px-4 py-3">unloaded_by_name</th>
                   <th className="px-4 py-3">AI status</th>
                   <th className="px-4 py-3">n8n_dispatch_status</th>
                   <th className="px-4 py-3">received_at</th>
@@ -163,14 +169,14 @@ export default function AdminStatusPage() {
               <tbody className="divide-y divide-slate-100">
                 {loadState === "loading" ? (
                   <tr>
-                    <td className="px-4 py-6 text-slate-500" colSpan={8}>
+                    <td className="px-4 py-6 text-slate-500" colSpan={11}>
                       Loading status data...
                     </td>
                   </tr>
                 ) : null}
                 {loadState === "ready" && receipts.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-slate-500" colSpan={8}>
+                    <td className="px-4 py-6 text-slate-500" colSpan={11}>
                       No active receipts found.
                     </td>
                   </tr>
@@ -180,7 +186,10 @@ export default function AdminStatusPage() {
                       <tr key={receipt.id} className="align-top">
                         <td className="whitespace-nowrap px-4 py-3 font-bold">{receipt.receipt_no || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3">{receipt.truck_plate || "-"}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{receipt.created_by_name || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3">{receipt.review_status || "pending"}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{receipt.reviewed_by_name || "-"}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{receipt.unloaded_by_name || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3">{getAiStatus(receipt)}</td>
                         <td className="whitespace-nowrap px-4 py-3">{receipt.n8n_dispatch_status || "-"}</td>
                         <td className="whitespace-nowrap px-4 py-3">{formatDate(receipt.received_at)}</td>
