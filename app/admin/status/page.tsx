@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { LoginRequiredMessage } from "@/components/LoginRequiredMessage";
+import { LogoutButton } from "@/components/LogoutButton";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 type ReceiptRow = {
@@ -110,19 +112,18 @@ export default function AdminStatusPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <header className="flex flex-col gap-2 border-b border-slate-200 pb-4">
-          <p className="text-xs font-bold uppercase text-brand-primary">Admin</p>
-          <h1 className="text-2xl font-black">Status Dashboard</h1>
-          <p className="max-w-2xl text-sm text-slate-600">
-            Read-only E2E smoke test visibility for receipt, AI, review, and n8n dispatch status.
-          </p>
+        <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-bold uppercase text-brand-primary">Admin</p>
+            <h1 className="text-2xl font-black">Status Dashboard</h1>
+            <p className="max-w-2xl text-sm text-slate-600">
+              Read-only E2E smoke test visibility for receipt, AI, review, and n8n dispatch status.
+            </p>
+          </div>
+          {loadState === "ready" ? <LogoutButton /> : null}
         </header>
 
-        {loadState === "login_required" ? (
-          <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-            Login required. Please sign in before opening the admin status dashboard.
-          </section>
-        ) : null}
+        {loadState === "login_required" ? <LoginRequiredMessage message="Login required. Please sign in before opening the admin status dashboard." /> : null}
 
         {loadState === "error" ? (
           <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-900">

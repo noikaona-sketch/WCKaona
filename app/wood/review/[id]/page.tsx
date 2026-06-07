@@ -4,6 +4,8 @@ import Image from "next/image";
 import { use, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { BottomActionBar } from "@/components/BottomActionBar";
+import { LoginRequiredMessage } from "@/components/LoginRequiredMessage";
+import { LogoutButton } from "@/components/LogoutButton";
 import { MobileHeader } from "@/components/MobileHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -85,6 +87,8 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
   const [reviewDecision, setReviewDecision] = useState<"approved" | "rejected" | "">("");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("กำลังโหลดผลตรวจ");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginRequired, setLoginRequired] = useState(false);
 
   const warnings = useMemo(() => analysis?.warnings ?? [], [analysis]);
 
@@ -98,9 +102,14 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
 
         if (sessionError) throw sessionError;
         if (!sessionData.session) {
-          if (isMounted) setMessage("กรุณาเข้าสู่ระบบก่อนตรวจผล AI");
+          if (isMounted) {
+            setLoginRequired(true);
+            setMessage("");
+          }
           return;
         }
+
+        if (isMounted) setIsAuthenticated(true);
 
         const [receiptResult, imageResult, analysisResult] = await Promise.all([
           supabase
@@ -219,18 +228,33 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
   return (
     <AppShell
       bottomAction={
-        <BottomActionBar
-          primaryLabel="Approve"
-          secondaryLabel="Reject"
-          primaryDisabled={!receipt || !suggestedGrade.trim() || isSaving}
-          primaryLoading={isSaving}
-          onPrimaryClick={() => handleReview("approved")}
-          onSecondaryClick={() => handleReview("rejected")}
-        />
+        isAuthenticated ? (
+          <BottomActionBar
+            primaryLabel="Approve"
+            secondaryLabel="Reject"
+            primaryDisabled={!receipt || !suggestedGrade.trim() || isSaving}
+            primaryLoading={isSaving}
+            onPrimaryClick={() => handleReview("approved")}
+            onSecondaryClick={() => handleReview("rejected")}
+          />
+        ) : undefined
       }
     >
-      <MobileHeader title="ตรวจงาน" subtitle={receipt?.receipt_no || "AI Result"} backUrl="/wood/review" rightAction={<StatusBadge status="Pending Review" />} />
+      <MobileHeader
+        title="ตรวจงาน"
+        subtitle={receipt?.receipt_no || "AI Result"}
+        backUrl="/wood/review"
+        rightAction={
+          isAuthenticated ? (
+            <div className="flex flex-col items-end gap-2">
+              <LogoutButton />
+              <StatusBadge status="Pending Review" />
+            </div>
+          ) : null
+        }
+      />
 
+      {loginRequired ? <LoginRequiredMessage message="กรุณาเข้าสู่ระบบก่อนตรวจผล AI" /> : null}
       {message ? <p className="mb-4 rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500 shadow-soft">{message}</p> : null}
 
       {receipt ? (

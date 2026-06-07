@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { LoginRequiredMessage } from "@/components/LoginRequiredMessage";
+import { LogoutButton } from "@/components/LogoutButton";
 import { MobileHeader } from "@/components/MobileHeader";
 import { ReceiptImagePreviewCards } from "@/components/ReceiptImagePreviewCards";
 import type { ReceiptPreviewImage } from "@/components/ReceiptImagePreviewCards";
@@ -39,6 +41,8 @@ function getAnalysis(value: ReviewReceipt["ai_analysis"]) {
 export default function ReviewListPage() {
   const [receipts, setReceipts] = useState<ReviewReceipt[]>([]);
   const [message, setMessage] = useState("กำลังโหลดงานรอตรวจ");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginRequired, setLoginRequired] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,9 +54,14 @@ export default function ReviewListPage() {
 
         if (sessionError) throw sessionError;
         if (!sessionData.session) {
-          if (isMounted) setMessage("กรุณาเข้าสู่ระบบก่อนดูงานรอตรวจ");
+          if (isMounted) {
+            setLoginRequired(true);
+            setMessage("");
+          }
           return;
         }
+
+        if (isMounted) setIsAuthenticated(true);
 
         const { data, error } = await supabase
           .from("wood_receipts")
@@ -82,8 +91,9 @@ export default function ReviewListPage() {
 
   return (
     <AppShell>
-      <MobileHeader title="งานรอตรวจ" subtitle="Pending review jobs" backUrl="/" />
+      <MobileHeader title="งานรอตรวจ" subtitle="Pending review jobs" backUrl="/" rightAction={isAuthenticated ? <LogoutButton /> : null} />
       <div className="space-y-4">
+        {loginRequired ? <LoginRequiredMessage message="กรุณาเข้าสู่ระบบก่อนดูงานรอตรวจ" /> : null}
         {message ? <p className="rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500 shadow-soft">{message}</p> : null}
         {receipts.map((receipt) => {
           const analysis = getAnalysis(receipt.ai_analysis);

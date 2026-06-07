@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { LoginRequiredMessage } from "@/components/LoginRequiredMessage";
+import { LogoutButton } from "@/components/LogoutButton";
 import { MobileHeader } from "@/components/MobileHeader";
 import { ReceiptImagePreviewCards } from "@/components/ReceiptImagePreviewCards";
 import type { ReceiptPreviewImage } from "@/components/ReceiptImagePreviewCards";
@@ -66,6 +68,8 @@ export default function HistoryPage() {
   const [activeFilter, setActiveFilter] = useState<HistoryFilter>("Today");
   const [receipts, setReceipts] = useState<HistoryReceipt[]>([]);
   const [message, setMessage] = useState("กำลังโหลดประวัติวันนี้");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginRequired, setLoginRequired] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -77,9 +81,14 @@ export default function HistoryPage() {
 
         if (sessionError) throw sessionError;
         if (!sessionData.session) {
-          if (isMounted) setMessage("กรุณาเข้าสู่ระบบก่อนดูประวัติวันนี้");
+          if (isMounted) {
+            setLoginRequired(true);
+            setMessage("");
+          }
           return;
         }
+
+        if (isMounted) setIsAuthenticated(true);
 
         const { data, error } = await supabase
           .from("wood_receipts")
@@ -115,7 +124,7 @@ export default function HistoryPage() {
 
   return (
     <AppShell>
-      <MobileHeader title="ประวัติวันนี้" subtitle="Daily history" backUrl="/" />
+      <MobileHeader title="ประวัติวันนี้" subtitle="Daily history" backUrl="/" rightAction={isAuthenticated ? <LogoutButton /> : null} />
       <div className="mb-4 flex gap-2 overflow-x-auto">
         {filters.map((filter) => (
           <button
@@ -129,8 +138,9 @@ export default function HistoryPage() {
         ))}
       </div>
       <div className="space-y-4">
+        {loginRequired ? <LoginRequiredMessage message="กรุณาเข้าสู่ระบบก่อนดูประวัติวันนี้" /> : null}
         {message ? <p className="rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500 shadow-soft">{message}</p> : null}
-        {!message && filteredReceipts.length === 0 ? <p className="rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500 shadow-soft">ไม่พบรายการในตัวกรองนี้</p> : null}
+        {!message && !loginRequired && filteredReceipts.length === 0 ? <p className="rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500 shadow-soft">ไม่พบรายการในตัวกรองนี้</p> : null}
         {filteredReceipts.map((receipt) => (
           <article key={receipt.id} className="rounded-2xl bg-white p-4 shadow-soft">
             <div className="mb-3 flex items-start justify-between gap-3">
