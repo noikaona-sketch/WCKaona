@@ -8,8 +8,25 @@ import { ReceiptImagePreviewCards } from "@/components/ReceiptImagePreviewCards"
 import type { ReceiptPreviewImage } from "@/components/ReceiptImagePreviewCards";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import type { ReceiptStatus } from "@/lib/mock-data";
 
 const filters = ["Today", "Approved", "Closed"] as const;
+const knownStatuses: ReceiptStatus[] = [
+  "Draft",
+  "Submitted",
+  "AI Processing",
+  "Pending Inbound Scale",
+  "Pending Unload",
+  "Pending Review",
+  "Approved",
+  "Pending Outbound Scale",
+  "Net Weight Completed",
+  "Closed",
+  "Rejected",
+  "Need Retake Photo",
+  "Need Scale Correction",
+  "Reopened",
+];
 
 type HistoryFilter = (typeof filters)[number];
 
@@ -39,10 +56,10 @@ function startOfTodayIso() {
   return today.toISOString();
 }
 
-function getDisplayStatus(receipt: HistoryReceipt) {
+function getDisplayStatus(receipt: HistoryReceipt): ReceiptStatus {
   if (receipt.review_status === "approved") return "Approved";
   if (receipt.review_status === "rejected") return "Rejected";
-  return receipt.status || "Submitted";
+  return knownStatuses.includes(receipt.status as ReceiptStatus) ? (receipt.status as ReceiptStatus) : "Submitted";
 }
 
 export default function HistoryPage() {
