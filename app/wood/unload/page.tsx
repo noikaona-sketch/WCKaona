@@ -1,18 +1,80 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { MobileHeader } from "@/components/MobileHeader";
-import { ReceiptCard } from "@/components/ReceiptCard";
-import { receipts } from "@/lib/mock-data";
+import { ReceiptImagePreviewCards } from "@/components/ReceiptImagePreviewCards";
+import type { ReceiptPreviewImage } from "@/components/ReceiptImagePreviewCards";
+import { StatusBadge } from "@/components/StatusBadge";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const presetLocations = ["ลานรับไม้", "โกดัง A", "โกดัง B", "จุดรอตรวจ", "อื่น ๆ"];
 
+type UnloadReceipt = {
+  id: string;
+  receipt_no: string;
+  truck_plate: string | null;
+  status: string;
+  inbound_weight_kg: number | null;
+  moisture_percent: number | null;
+  received_at: string | null;
+  receipt_images: ReceiptPreviewImage[] | null;
+};
+
+function formatNumber(value: number | null) {
+  return value === null ? "-" : value.toLocaleString();
+}
+
+function formatDate(value: string | null) {
+  return value ? new Date(value).toLocaleString("th-TH") : "-";
+}
+
 export default function UnloadPage() {
-  const pendingReceipts = useMemo(() => receipts.filter((receipt) => receipt.status === "Pending Unload"), []);
+  const [pendingReceipts, setPendingReceipts] = useState<UnloadReceipt[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<Record<string, string>>({});
   const [customLocations, setCustomLocations] = useState<Record<string, string>>({});
   const [confirmedLocations, setConfirmedLocations] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("กำลังโหลดงานรอลงสินค้า");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPendingUnload() {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) throw sessionError;
+        if (!sessionData.session) {
+          if (isMounted) setMessage("กรุณาเข้าสู่ระบบก่อนดูงานลงสินค้า");
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("wood_receipts")
+          .select("id, receipt_no, truck_plate, status, inbound_weight_kg, moisture_percent, received_at, receipt_images(image_type, file_path, file_name)")
+          .is("deleted_at", null)
+          .eq("status", "Pending Unload")
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (error) throw error;
+
+        if (isMounted) {
+          setPendingReceipts((data ?? []) as UnloadReceipt[]);
+          setMessage(data?.length ? "" : "ยังไม่มีงานรอลงสินค้า");
+        }
+      } catch (error) {
+        if (isMounted) setMessage(error instanceof Error ? error.message : "โหลดงานลงสินค้าไม่สำเร็จ");
+      }
+    }
+
+    loadPendingUnload();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function getTrimmedLocation(receiptId: string) {
     const selectedLocation = selectedLocations[receiptId] || "";
@@ -32,6 +94,7 @@ export default function UnloadPage() {
     <AppShell>
       <MobileHeader title="ลงสินค้า" subtitle="Confirm unloading" backUrl="/" />
       <div className="space-y-4">
+        {message ? <p className="rounded-2xl bg-white p-4 text-sm font-semibold text-slate-500 shadow-soft">{message}</p> : null}
         {pendingReceipts.map((receipt) => {
           const selectedLocation = selectedLocations[receipt.id] || "";
           const customLocation = customLocations[receipt.id] || "";
@@ -42,7 +105,20 @@ export default function UnloadPage() {
 
           return (
             <div key={receipt.id} className="space-y-3">
-              <ReceiptCard receipt={receipt} />
+              <article className="rounded-2xl bg-white p-4 shadow-soft">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-950">{receipt.receipt_no}</p>
+                    <p className="text-sm text-slate-500">ทะเบียน {receipt.truck_plate || "-"} · {formatDate(receipt.received_at)}</p>
+                  </div>
+                  <StatusBadge status="Pending Unload" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center text-sm">
+                  <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">Gross</p><p className="text-lg font-bold">{formatNumber(receipt.inbound_weight_kg)}</p></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">Moisture</p><p className="text-lg font-bold">{formatNumber(receipt.moisture_percent)}%</p></div>
+                </div>
+                <ReceiptImagePreviewCards images={receipt.receipt_images} className="mt-3" />
+              </article>
 
               <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-soft">
                 <label className="grid gap-2 text-sm">
