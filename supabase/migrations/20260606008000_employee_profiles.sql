@@ -1,6 +1,6 @@
 -- PR #22 Employee Profile
--- Scope: employee profile table and receipt employee name snapshots only.
--- Intentionally excludes role systems, new RLS policies, AI, n8n, and storage changes.
+-- Scope: employee profile table, owner-read RLS, and receipt employee name snapshots only.
+-- Intentionally excludes role systems, AI, n8n, and storage changes.
 
 create table public.employee_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -22,6 +22,18 @@ create table public.employee_profiles (
 
 create index employee_profiles_active_idx on public.employee_profiles(is_active) where deleted_at is null;
 create index employee_profiles_display_name_idx on public.employee_profiles(display_name) where deleted_at is null;
+
+alter table public.employee_profiles enable row level security;
+
+create policy employee_profiles_select_own_profile
+on public.employee_profiles
+for select
+to authenticated
+using (
+  user_id = auth.uid()
+  and is_active = true
+  and deleted_at is null
+);
 
 alter table public.wood_receipts
   add column created_by uuid references auth.users(id) on delete set null,
