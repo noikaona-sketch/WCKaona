@@ -6,6 +6,8 @@ export type ReceiptImageFiles = Record<RequiredReceiptImageId, File>;
 
 const BUCKET_NAME = "wood-receipts";
 const JPEG_MIME_TYPE = "image/jpeg";
+const MAX_IMAGE_WIDTH = 1600;
+const JPEG_QUALITY = 0.75;
 
 const imageConfig: Record<RequiredReceiptImageId, { fileName: string; imageType: string }> = {
   wood_load: { fileName: "01_size.jpg", imageType: "size" },
@@ -29,6 +31,78 @@ function validateJpegFiles(files: ReceiptImageFiles) {
       throw new Error("รองรับเฉพาะไฟล์ JPEG สำหรับการอัปโหลดรอบนี้");
     }
   }
+}
+
+async function loadImageSource(file: File): Promise<{ source: CanvasImageSource; width: number; height: number; close: () => void }> {
+  if ("createImageBitmap" in globalThis) {
+    const bitmap = await createImageBitmap(file);
+    return {
+      source: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      close: () => bitmap.close(),
+    };
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new window.Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error("โหลดรูปเพื่อบีบอัดไม่สำเร็จ"));
+    element.src = objectUrl;
+  });
+
+  return {
+    source: image,
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+    close: () => URL.revokeObjectURL(objectUrl),
+  };
+}
+
+async function resizeImageToJpeg(file: File, imageId: RequiredReceiptImageId) {
+  let loadedImage: Awaited<ReturnType<typeof loadImageSource>> | null = null;
+
+  try {
+    loadedImage = await loadImageSource(file);
+    const scale = Math.min(1, MAX_IMAGE_WIDTH / loadedImage.width);
+    const width = Math.max(1, Math.round(loadedImage.width * scale));
+    const height = Math.max(1, Math.round(loadedImage.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("เปิด canvas สำหรับบีบอัดรูปไม่สำเร็จ");
+
+    context.drawImage(loadedImage.source, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, JPEG_MIME_TYPE, JPEG_QUALITY);
+    });
+
+    if (!blob) throw new Error("สร้างไฟล์ JPEG หลังบีบอัดไม่สำเร็จ");
+
+    return new File([blob], imageConfig[imageId].fileName, {
+      type: JPEG_MIME_TYPE,
+      lastModified: Date.now(),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "ไม่ทราบสาเหตุ";
+    throw new Error(`บีบอัดรูป ${imageConfig[imageId].imageType} ไม่สำเร็จ: ${detail}`);
+  } finally {
+    loadedImage?.close();
+  }
+}
+
+async function resizeReceiptImages(files: ReceiptImageFiles): Promise<ReceiptImageFiles> {
+  const resizedFiles = {} as ReceiptImageFiles;
+
+  for (const imageId of Object.keys(imageConfig) as RequiredReceiptImageId[]) {
+    resizedFiles[imageId] = await resizeImageToJpeg(files[imageId], imageId);
+  }
+
+  return resizedFiles;
 }
 
 export async function createDraftWoodReceipt({
@@ -62,12 +136,13 @@ export async function uploadReceiptImages({
   receiptId: string;
   files: ReceiptImageFiles;
 }) {
-  validateJpegFiles(files);
+  const uploadFiles = await resizeReceiptImages(files);
+  validateJpegFiles(uploadFiles);
 
   const uploadedRows = [];
 
   for (const imageId of Object.keys(imageConfig) as RequiredReceiptImageId[]) {
-    const file = files[imageId];
+    const file = uploadFiles[imageId];
     const filePath = buildReceiptImagePath(receiptId, imageId);
 
     const { error: uploadError } = await supabase.storage
