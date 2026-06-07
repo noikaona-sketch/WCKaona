@@ -2,7 +2,6 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 type EmployeeProfile = {
   display_name: string | null;
-  employee_code: string | null;
   is_active: boolean | null;
 };
 
@@ -19,7 +18,7 @@ export async function getCurrentEmployeeName(supabase: SupabaseClient) {
 
   const { data, error } = await supabase
     .from("employee_profiles")
-    .select("display_name, employee_code, is_active")
+    .select("display_name, is_active")
     .eq("user_id", user.id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -35,7 +34,7 @@ export async function getCurrentEmployeeName(supabase: SupabaseClient) {
 export async function getEmployeeNameByUserId(supabase: SupabaseClient, userId: string, fallbackName = "") {
   const { data, error } = await supabase
     .from("employee_profiles")
-    .select("display_name, employee_code, is_active")
+    .select("display_name, is_active")
     .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
