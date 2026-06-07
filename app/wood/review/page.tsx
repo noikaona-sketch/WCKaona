@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { MobileHeader } from "@/components/MobileHeader";
+import { ReceiptImagePreviewCards } from "@/components/ReceiptImagePreviewCards";
+import type { ReceiptPreviewImage } from "@/components/ReceiptImagePreviewCards";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -22,6 +24,7 @@ type ReviewReceipt = {
   moisture_percent: number | null;
   received_at: string | null;
   ai_analysis: ReviewAnalysis | ReviewAnalysis[] | null;
+  receipt_images: ReceiptPreviewImage[] | null;
 };
 
 function formatNumber(value: number | null) {
@@ -53,7 +56,7 @@ export default function ReviewListPage() {
 
         const { data, error } = await supabase
           .from("wood_receipts")
-          .select("id, receipt_no, truck_plate, status, review_status, inbound_weight_kg, moisture_percent, received_at, ai_analysis(suggested_grade, confidence)")
+          .select("id, receipt_no, truck_plate, status, review_status, inbound_weight_kg, moisture_percent, received_at, ai_analysis(suggested_grade, confidence), receipt_images(image_type, file_path, file_name)")
           .is("deleted_at", null)
           .eq("review_status", "pending")
           .order("created_at", { ascending: false })
@@ -86,7 +89,7 @@ export default function ReviewListPage() {
           const analysis = getAnalysis(receipt.ai_analysis);
 
           return (
-            <Link key={receipt.id} href={`/wood/review/${receipt.id}`} className="block rounded-2xl bg-white p-4 shadow-soft">
+            <article key={receipt.id} className="rounded-2xl bg-white p-4 shadow-soft">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-slate-950">{receipt.receipt_no}</p>
@@ -99,7 +102,11 @@ export default function ReviewListPage() {
                 <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">Moisture</p><p className="text-lg font-bold">{formatNumber(receipt.moisture_percent)}%</p></div>
                 <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">Gross</p><p className="text-lg font-bold">{formatNumber(receipt.inbound_weight_kg)}</p></div>
               </div>
-            </Link>
+              <ReceiptImagePreviewCards images={receipt.receipt_images} className="mt-3" />
+              <Link href={`/wood/review/${receipt.id}`} className="mt-3 block h-11 rounded-2xl bg-brand-primary px-4 py-3 text-center text-sm font-bold text-white">
+                Open Review
+              </Link>
+            </article>
           );
         })}
       </div>
