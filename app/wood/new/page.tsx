@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { BottomActionBar } from "@/components/BottomActionBar";
 import { ImageCaptureCard } from "@/components/ImageCaptureCard";
 import { MobileHeader } from "@/components/MobileHeader";
+import { getCurrentEmployeeName } from "@/lib/employee-profile";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { createDraftWoodReceipt, uploadReceiptImages } from "@/lib/storage/upload-receipt-images";
 import type { ReceiptImageFiles, RequiredReceiptImageId } from "@/lib/storage/upload-receipt-images";
@@ -40,6 +41,7 @@ export default function NewReceiptPage() {
   const [imageFiles, setImageFiles] = useState<Partial<Record<RequiredReceiptImageId, File>>>({});
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [employeeName, setEmployeeName] = useState("-");
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
@@ -64,15 +66,16 @@ export default function NewReceiptPage() {
           return;
         }
 
-        const { data, error } = await supabase
-          .from("suppliers")
-          .select("id, name, supplier_code")
-          .order("name", { ascending: true });
+        const [employeeResult, supplierResult] = await Promise.all([
+          getCurrentEmployeeName(supabase),
+          supabase.from("suppliers").select("id, name, supplier_code").order("name", { ascending: true }),
+        ]);
 
-        if (error) throw error;
+        if (supplierResult.error) throw supplierResult.error;
 
         if (isMounted) {
-          const supplierOptions = data ?? [];
+          const supplierOptions = supplierResult.data ?? [];
+          setEmployeeName(employeeResult.displayName || "-");
           setSuppliers(supplierOptions);
           setSelectedSupplierId((current) => current || supplierOptions[0]?.id || "");
           if (supplierOptions.length === 0) setUploadMessage("ยังไม่มี supplier สำหรับสร้าง draft receipt");
@@ -166,8 +169,8 @@ export default function NewReceiptPage() {
           </select>
         </label>
         <div className="flex justify-between"><span className="text-slate-500">Receipt</span><strong>สร้างอัตโนมัติ</strong></div>
-        <div className="flex justify-between"><span className="text-slate-500">User</span><strong>ทีมรับไม้</strong></div>
-        <div className="flex justify-between"><span className="text-slate-500">Date Time</span><strong>05 Jun 2026 08:30</strong></div>
+        <div className="flex justify-between"><span className="text-slate-500">Employee</span><strong>{employeeName}</strong></div>
+        <div className="flex justify-between"><span className="text-slate-500">Date Time</span><strong>{new Date().toLocaleString("th-TH")}</strong></div>
         <div className="flex justify-between"><span className="text-slate-500">GPS</span><strong>รอตำแหน่ง</strong></div>
       </section>
 
