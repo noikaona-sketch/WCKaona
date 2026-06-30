@@ -25,6 +25,7 @@ type ReviewReceipt = {
   inbound_weight_kg: number | null;
   moisture_percent: number | null;
   received_at: string | null;
+  created_by_name: string | null;
   ai_analysis: ReviewAnalysis | ReviewAnalysis[] | null;
   receipt_images: ReceiptPreviewImage[] | null;
 };
@@ -65,7 +66,7 @@ export default function ReviewListPage() {
 
         const { data, error } = await supabase
           .from("wood_receipts")
-          .select("id, receipt_no, truck_plate, status, review_status, inbound_weight_kg, moisture_percent, received_at, ai_analysis(suggested_grade, confidence), receipt_images(image_type, file_path, file_name)")
+          .select("id, receipt_no, truck_plate, status, review_status, inbound_weight_kg, moisture_percent, received_at, created_by_name, ai_analysis(suggested_grade, confidence), receipt_images(image_type, file_path, file_name)")
           .is("deleted_at", null)
           .eq("review_status", "pending")
           .order("created_at", { ascending: false })
@@ -104,6 +105,7 @@ export default function ReviewListPage() {
                 <div>
                   <p className="font-semibold text-slate-950">{receipt.receipt_no}</p>
                   <p className="text-sm text-slate-500">ทะเบียน {receipt.truck_plate || "-"}</p>
+                  <p className="text-xs font-semibold text-slate-400">Created by {receipt.created_by_name || "-"}</p>
                 </div>
                 <StatusBadge status="Pending Review" />
               </div>

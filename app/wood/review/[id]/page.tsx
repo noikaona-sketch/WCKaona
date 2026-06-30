@@ -35,6 +35,9 @@ type ReceiptDetail = {
   reviewer_note: string | null;
   reviewed_at: string | null;
   received_at: string | null;
+  created_by_name: string | null;
+  reviewed_by_name: string | null;
+  unloaded_by_name: string | null;
 };
 
 type ReceiptImage = {
@@ -65,6 +68,7 @@ type ReviewSaveResponse = {
   reviewed_grade: string | null;
   reviewer_note: string | null;
   reviewed_at: string | null;
+  reviewed_by_name: string | null;
   error?: string;
   detail?: string;
 };
@@ -114,7 +118,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
         const [receiptResult, imageResult, analysisResult] = await Promise.all([
           supabase
             .from("wood_receipts")
-            .select("id, receipt_no, truck_plate, status, inbound_weight_kg, outbound_weight_kg, net_weight_kg, moisture_percent, final_grade, unloading_location, review_status, reviewed_grade, reviewer_note, reviewed_at, received_at")
+            .select("id, receipt_no, truck_plate, status, inbound_weight_kg, outbound_weight_kg, net_weight_kg, moisture_percent, final_grade, unloading_location, review_status, reviewed_grade, reviewer_note, reviewed_at, received_at, created_by_name, reviewed_by_name, unloaded_by_name")
             .eq("id", id)
             .is("deleted_at", null)
             .maybeSingle(),
@@ -270,6 +274,9 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div><dt className="text-slate-500">ทะเบียน</dt><dd className="font-semibold text-slate-900">{receipt.truck_plate || analysis?.truck_plate || "-"}</dd></div>
               <div><dt className="text-slate-500">รับเข้า</dt><dd className="font-semibold text-slate-900">{formatDate(receipt.received_at)}</dd></div>
+              <div><dt className="text-slate-500">Created by</dt><dd className="font-semibold text-slate-900">{receipt.created_by_name || "-"}</dd></div>
+              <div><dt className="text-slate-500">Reviewed by</dt><dd className="font-semibold text-slate-900">{receipt.reviewed_by_name || "-"}</dd></div>
+              <div><dt className="text-slate-500">Unloaded by</dt><dd className="font-semibold text-slate-900">{receipt.unloaded_by_name || "-"}</dd></div>
               <div><dt className="text-slate-500">Gross</dt><dd className="font-semibold text-slate-900">{formatNumber(receipt.inbound_weight_kg, " kg")}</dd></div>
               <div><dt className="text-slate-500">Unload</dt><dd className="font-semibold text-slate-900">{receipt.unloading_location || "-"}</dd></div>
               <div><dt className="text-slate-500">Review</dt><dd className="font-semibold text-slate-900">{receipt.review_status}</dd></div>

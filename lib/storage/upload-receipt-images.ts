@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getCurrentEmployeeName } from "@/lib/employee-profile";
 
 export type RequiredReceiptImageId = "wood_load" | "moisture_meter" | "truck_plate";
 
@@ -112,6 +113,7 @@ export async function createDraftWoodReceipt({
   supabase: SupabaseClient;
   supplierId: string;
 }) {
+  const employee = await getCurrentEmployeeName(supabase);
   const { data, error } = await supabase
     .from("wood_receipts")
     .insert({
@@ -119,6 +121,8 @@ export async function createDraftWoodReceipt({
       supplier_id: supplierId,
       status: "draft",
       received_at: new Date().toISOString(),
+      created_by: employee.userId,
+      created_by_name: employee.displayName || null,
     })
     .select("id, receipt_no")
     .single();

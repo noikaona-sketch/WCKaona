@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getEmployeeNameByUserId } from "@/lib/employee-profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type ReviewDecision = "approved" | "rejected";
@@ -89,13 +90,14 @@ export async function POST(request: Request) {
     const serverClient = createServerSupabaseClient();
     const { data: beforeReceipt, error: beforeError } = await serverClient
       .from("wood_receipts")
-      .select("id, review_status, reviewed_grade, reviewer_note, reviewed_at")
+      .select("id, review_status, reviewed_grade, reviewer_note, reviewed_at, reviewed_by_name")
       .eq("id", receiptId)
       .is("deleted_at", null)
       .single();
 
     if (beforeError) throw beforeError;
 
+    const reviewerName = await getEmployeeNameByUserId(serverClient, userData.user.id, userData.user.email || "");
     const reviewedAt = new Date().toISOString();
     const updatePayload = {
       review_status: reviewStatus,
@@ -103,6 +105,7 @@ export async function POST(request: Request) {
       reviewer_note: reviewerNote || null,
       reviewed_at: reviewedAt,
       reviewed_by: userData.user.id,
+      reviewed_by_name: reviewerName || null,
     };
 
     const { data: updatedReceipt, error: updateError } = await serverClient
@@ -110,7 +113,7 @@ export async function POST(request: Request) {
       .update(updatePayload)
       .eq("id", receiptId)
       .is("deleted_at", null)
-      .select("id, review_status, reviewed_grade, reviewer_note, reviewed_at")
+      .select("id, review_status, reviewed_grade, reviewer_note, reviewed_at, reviewed_by_name")
       .single();
 
     if (updateError) throw updateError;
@@ -123,7 +126,7 @@ export async function POST(request: Request) {
       entity_id: receiptId,
       before_data: beforeReceipt,
       after_data: updatePayload,
-      metadata: { source: "review_decision_api" },
+      metadata: { source: "review_decision_api", actor_name: reviewerName || null },
     });
 
     if (auditError) {
