@@ -9,8 +9,12 @@ const PROMPT_VERSION = "receipt-vision-v1";
 const REQUIRED_IMAGE_TYPES = ["size", "moisture", "license"] as const;
 const MAX_WARNINGS = 10;
 const MAX_WARNING_LENGTH = 200;
+const CM_PER_INCH = 2.54;
+const GRADE_A_MIN_DIAMETER_INCHES = 4;
+const GRADE_A_MIN_DIAMETER_CM = GRADE_A_MIN_DIAMETER_INCHES * CM_PER_INCH;
+const GRADE_A_REQUIRED_PERCENT = 60;
 const ANALYSIS_PROMPT =
-  "Analyze these wood receipt images and return JSON only. Use null when a number cannot be read confidently. Do not include markdown.";
+  "Analyze these wood receipt images and return JSON only. Use null when a number cannot be read confidently. Do not include markdown. Estimate diameter_over_4_inch_percent as the percent of visible logs with diameter greater than 4 inches. The system will apply grade rules after parsing.";
 
 type AiProvider = "openai" | "claude";
 
@@ -20,6 +24,7 @@ export type ReceiptVisionAnalysisResult = {
   estimated_log_count: number | null;
   estimated_diameter_min_cm: number | null;
   estimated_diameter_max_cm: number | null;
+  diameter_over_4_inch_percent: number | null;
   wood_condition: string;
   suggested_grade: string;
   confidence: number;
@@ -79,6 +84,7 @@ const receiptAnalysisJsonSchema = {
     estimated_log_count: { type: ["number", "null"] },
     estimated_diameter_min_cm: { type: ["number", "null"] },
     estimated_diameter_max_cm: { type: ["number", "null"] },
+    diameter_over_4_inch_percent: { type: ["number", "null"], minimum: 0, maximum: 100 },
     wood_condition: { type: "string" },
     suggested_grade: { type: "string" },
     confidence: { type: "number", minimum: 0, maximum: 100 },
@@ -90,6 +96,7 @@ const receiptAnalysisJsonSchema = {
     "estimated_log_count",
     "estimated_diameter_min_cm",
     "estimated_diameter_max_cm",
+    "diameter_over_4_inch_percent",
     "wood_condition",
     "suggested_grade",
     "confidence",
@@ -103,6 +110,7 @@ const emptyResult: ReceiptVisionAnalysisResult = {
   estimated_log_count: null,
   estimated_diameter_min_cm: null,
   estimated_diameter_max_cm: null,
+  diameter_over_4_inch_percent: null,
   wood_condition: "",
   suggested_grade: "",
   confidence: 0,
@@ -142,18 +150,36 @@ function normalizeWarnings(value: unknown) {
     .slice(0, MAX_WARNINGS);
 }
 
-function normalizeAnalysisResult(value: Partial<ReceiptVisionAnalysisResult>): ReceiptVisionAnalysisResult {
+function applyGradeRules(result: ReceiptVisionAnalysisResult): ReceiptVisionAnalysisResult {
+  if (result.diameter_over_4_inch_percent === null || result.diameter_over_4_inch_percent <= GRADE_A_REQUIRED_PERCENT) {
+    return result;
+  }
+
+  const ruleWarning = `Applied grade A rule: more than ${GRADE_A_REQUIRED_PERCENT}% of visible logs are greater than ${GRADE_A_MIN_DIAMETER_INCHES} inches (${GRADE_A_MIN_DIAMETER_CM.toFixed(2)} cm).`;
+  const warnings = [...result.warnings, ruleWarning].slice(0, MAX_WARNINGS);
+
   return {
+    ...result,
+    suggested_grade: "A",
+    warnings,
+  };
+}
+
+function normalizeAnalysisResult(value: Partial<ReceiptVisionAnalysisResult>): ReceiptVisionAnalysisResult {
+  const result = {
     truck_plate: typeof value.truck_plate === "string" ? value.truck_plate.trim() : "",
     moisture_percent: boundedNumber(value.moisture_percent, { min: 0, max: 100 }),
     estimated_log_count: boundedNumber(value.estimated_log_count, { min: 0, integer: true }),
     estimated_diameter_min_cm: boundedNumber(value.estimated_diameter_min_cm, { min: 0 }),
     estimated_diameter_max_cm: boundedNumber(value.estimated_diameter_max_cm, { min: 0 }),
+    diameter_over_4_inch_percent: boundedNumber(value.diameter_over_4_inch_percent, { min: 0, max: 100 }),
     wood_condition: typeof value.wood_condition === "string" ? value.wood_condition.trim() : "",
     suggested_grade: typeof value.suggested_grade === "string" ? value.suggested_grade.trim() : "",
     confidence: clampConfidence(value.confidence),
     warnings: normalizeWarnings(value.warnings),
   };
+
+  return applyGradeRules(result);
 }
 
 function parseVisionJson(responseText: string) {
@@ -379,7 +405,21 @@ export async function analyzeReceiptImages(receiptId: string): Promise<ReceiptVi
       suggested_grade: result.suggested_grade,
       confidence: result.confidence,
       warnings: result.warnings,
-      raw_response: { provider, response: rawResponse },
+      raw_response: {
+        provider,
+        response: rawResponse,
+        normalized_result: result,
+        grade_rules: [
+          {
+            grade: "A",
+            min_diameter_inches: GRADE_A_MIN_DIAMETER_INCHES,
+            min_diameter_cm: GRADE_A_MIN_DIAMETER_CM,
+            required_percent: GRADE_A_REQUIRED_PERCENT,
+            actual_percent: result.diameter_over_4_inch_percent,
+            applied: result.suggested_grade === "A" && result.diameter_over_4_inch_percent !== null && result.diameter_over_4_inch_percent > GRADE_A_REQUIRED_PERCENT,
+          },
+        ],
+      },
       summary: null,
     },
     { onConflict: "wood_receipt_id" },
