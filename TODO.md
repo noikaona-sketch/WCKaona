@@ -8,7 +8,7 @@ Last reviewed: 2026-07-14
 - Branch: `main`
 - Git status at review time: clean
 - Stack found: Next.js App Router, TypeScript, Tailwind CSS, Supabase client/server, Supabase migrations
-- Node dependencies: `node_modules` not installed locally at review time
+- Node dependencies: installed locally on 2026-07-14; `package-lock.json` created
 - Main product goal: build a complete wood receiving system with AI-assisted grading
 
 ## Original Product Expectations
@@ -69,19 +69,19 @@ Last reviewed: 2026-07-14
 ## Known Gaps and Risks
 
 - Role-based access is incomplete. Current RLS is broad authenticated access, not the detailed roles from the spec.
-- Workflow status transitions are inconsistent:
+- Workflow status transitions are inconsistent; canonical values are now documented in `docs/36_Canonical_Workflow_and_Image_Types.md`:
   - Specs use statuses like `Pending Inbound Scale`, `Pending Unload`, `Pending Review`, `Closed`.
   - Database default uses lowercase `draft`.
   - Some UI uses mock status strings.
 - Storage naming differs from early PR docs:
   - Docs mention `receipt_no/image_type/timestamp.ext`.
   - Current implementation uses `receipt/{receipt_id}/01_size.jpg`, `02_moisture.jpg`, `03_license.jpg`.
-- Image type naming differs from docs:
+- Image type naming differs from docs; canonical values are now documented in `docs/36_Canonical_Workflow_and_Image_Types.md`:
   - Docs mention `truck_plate`, `moisture_meter`, `wood_with_pvc`.
   - Current implementation stores `license`, `moisture`, `size`.
 - Upload validation currently converts all images to JPEG and then only accepts JPEG, while docs allow jpg/jpeg/png/webp up to 10 MB.
 - Review detail source has mojibake/garbled Thai strings in code, likely from encoding conversion. UI text should be audited and repaired.
-- No local dependency install was present, so build/typecheck/lint were not verified during this review.
+- Baseline verification now passes: `npm run typecheck`, `npm run lint`, and `npm run build`.
 - No automated test suite was found beyond package scripts.
 - Supabase migrations are forward migrations only; reversibility was not verified.
 - Audit coverage exists for review decision but not yet verified for every required action.
@@ -90,12 +90,15 @@ Last reviewed: 2026-07-14
 
 ### P0 - Stabilize Current Baseline
 
-- [ ] Install dependencies and run `npm run typecheck`.
-- [ ] Run `npm run build`.
-- [ ] Verify whether `npm run lint` works with Next.js 15 / ESLint 9 setup.
-- [ ] Fix Thai text encoding/mojibake in affected source files, especially review detail page.
-- [ ] Decide canonical workflow status values and align docs, database defaults, UI, APIs, and mock data.
-- [ ] Decide canonical image type names and align docs, DB rows, storage paths, AI analysis, and review UI.
+- [x] Install dependencies and run `npm run typecheck`.
+- [x] Run `npm run build`.
+- [x] Verify whether `npm run lint` works with Next.js 15 / ESLint 9 setup.
+- [x] Audit Thai text encoding/mojibake in source files; no mojibake patterns found in current source scan.
+- [x] Decide canonical workflow status values. See `docs/36_Canonical_Workflow_and_Image_Types.md`.
+- [x] Decide canonical image type names. See `docs/36_Canonical_Workflow_and_Image_Types.md`.
+
+- [ ] Align workflow status values across database defaults, UI, APIs, mock data, and existing records.
+- [ ] Align image type values across DB rows, storage paths, AI analysis, review UI, and storage policies.
 
 ### P1 - Complete Core Receipt Flow
 
@@ -151,4 +154,4 @@ Last reviewed: 2026-07-14
 
 ## Next Best Action
 
-Start with P0. The highest-leverage next step is to install dependencies, run typecheck/build, then fix encoding and naming/status mismatches before adding more workflow logic.
+Continue P0 by deciding canonical workflow status values and canonical image type names, then align docs, database fields, UI, APIs, and mock data before adding more workflow logic.

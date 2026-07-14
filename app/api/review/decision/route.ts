@@ -3,8 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 import { getEmployeeNameByUserId } from "@/lib/employee-profile";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-type ReviewDecision = "approved" | "rejected";
-
 type ReviewRequest = {
   receiptId?: unknown;
   reviewStatus?: unknown;
