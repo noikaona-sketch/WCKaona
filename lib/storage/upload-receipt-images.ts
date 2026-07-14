@@ -6,6 +6,16 @@ export type RequiredReceiptImageId = "wood_load" | "moisture_meter" | "truck_pla
 
 export type ReceiptImageFiles = Record<RequiredReceiptImageId, File>;
 
+export type ReceiptGpsStatus = "captured" | "permission_denied" | "unavailable" | "unsupported" | "timeout" | "error";
+
+export type ReceiptGpsEvidence = {
+  gpsLat: number | null;
+  gpsLng: number | null;
+  gpsAccuracyM: number | null;
+  gpsCapturedAt: string | null;
+  gpsStatus: ReceiptGpsStatus;
+};
+
 const BUCKET_NAME = "wood-receipts";
 const JPEG_MIME_TYPE = "image/jpeg";
 const MAX_IMAGE_WIDTH = 1600;
@@ -110,9 +120,11 @@ async function resizeReceiptImages(files: ReceiptImageFiles): Promise<ReceiptIma
 export async function createDraftWoodReceipt({
   supabase,
   supplierId,
+  gps,
 }: {
   supabase: SupabaseClient;
   supplierId: string;
+  gps?: ReceiptGpsEvidence;
 }) {
   const employee = await getCurrentEmployeeName(supabase);
   const { data, error } = await supabase
@@ -124,6 +136,11 @@ export async function createDraftWoodReceipt({
       received_at: new Date().toISOString(),
       created_by: employee.userId,
       created_by_name: employee.displayName || null,
+      gps_lat: gps?.gpsLat ?? null,
+      gps_lng: gps?.gpsLng ?? null,
+      gps_accuracy_m: gps?.gpsAccuracyM ?? null,
+      gps_captured_at: gps?.gpsCapturedAt ?? null,
+      gps_status: gps?.gpsStatus ?? "unavailable",
     })
     .select("id, receipt_no")
     .single();

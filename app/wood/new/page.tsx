@@ -8,7 +8,7 @@ import { MobileHeader } from "@/components/MobileHeader";
 import { getCurrentEmployeeName } from "@/lib/employee-profile";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { createDraftWoodReceipt, uploadReceiptImages } from "@/lib/storage/upload-receipt-images";
-import type { ReceiptImageFiles, RequiredReceiptImageId } from "@/lib/storage/upload-receipt-images";
+import type { ReceiptGpsEvidence, ReceiptGpsStatus, ReceiptImageFiles, RequiredReceiptImageId } from "@/lib/storage/upload-receipt-images";
 
 type SupplierOption = {
   id: string;
@@ -22,6 +22,8 @@ type AiAnalyzeResponse = {
     status?: string;
   };
 };
+
+type GpsCaptureStatus = ReceiptGpsStatus | "capturing";
 
 const requiredImages: Array<{ id: RequiredReceiptImageId; title: string; description: string }> = [
   { id: "truck_plate", title: "ทะเบียนรถ", description: "Truck Plate" },
@@ -43,18 +45,51 @@ function collectReceiptFiles(imageFiles: Partial<Record<RequiredReceiptImageId, 
   };
 }
 
+function buildUnavailableGpsEvidence(gpsStatus: ReceiptGpsStatus): ReceiptGpsEvidence {
+  return {
+    gpsLat: null,
+    gpsLng: null,
+    gpsAccuracyM: null,
+    gpsCapturedAt: null,
+    gpsStatus,
+  };
+}
+
+function mapGeolocationError(error: GeolocationPositionError): ReceiptGpsStatus {
+  if (error.code === error.PERMISSION_DENIED) return "permission_denied";
+  if (error.code === error.POSITION_UNAVAILABLE) return "unavailable";
+  if (error.code === error.TIMEOUT) return "timeout";
+  return "error";
+}
+
+function getGpsLabel(gpsStatus: GpsCaptureStatus, gpsEvidence: ReceiptGpsEvidence) {
+  if (gpsStatus === "capturing") return "กำลังขอตำแหน่ง";
+  if (gpsStatus === "captured" && gpsEvidence.gpsLat !== null && gpsEvidence.gpsLng !== null) {
+    const accuracy = gpsEvidence.gpsAccuracyM !== null ? ` ±${Math.round(gpsEvidence.gpsAccuracyM)}m` : "";
+    return `${gpsEvidence.gpsLat.toFixed(5)}, ${gpsEvidence.gpsLng.toFixed(5)}${accuracy}`;
+  }
+  if (gpsStatus === "permission_denied") return "ไม่ได้อนุญาต";
+  if (gpsStatus === "unsupported") return "อุปกรณ์ไม่รองรับ";
+  if (gpsStatus === "timeout") return "จับตำแหน่งไม่ทัน";
+  if (gpsStatus === "error") return "อ่านตำแหน่งไม่สำเร็จ";
+  return "ยังไม่มีพิกัด";
+}
+
 export default function NewReceiptPage() {
   const [readyImages, setReadyImages] = useState<Record<string, boolean>>({});
   const [imageFiles, setImageFiles] = useState<Partial<Record<RequiredReceiptImageId, File>>>({});
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [employeeName, setEmployeeName] = useState("-");
+  const [gpsStatus, setGpsStatus] = useState<GpsCaptureStatus>("unavailable");
+  const [gpsEvidence, setGpsEvidence] = useState<ReceiptGpsEvidence>(() => buildUnavailableGpsEvidence("unavailable"));
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const readyCount = useMemo(() => requiredImages.filter((image) => readyImages[image.id]).length, [readyImages]);
   const allImagesReady = readyCount === requiredImages.length;
   const canUpload = allImagesReady && Boolean(selectedSupplierId) && !isUploading && !isLoadingSuppliers;
+  const gpsLabel = useMemo(() => getGpsLabel(gpsStatus, gpsEvidence), [gpsEvidence, gpsStatus]);
 
   useEffect(() => {
     let isMounted = true;
@@ -101,6 +136,46 @@ export default function NewReceiptPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      setGpsStatus("unsupported");
+      setGpsEvidence(buildUnavailableGpsEvidence("unsupported"));
+      return;
+    }
+
+    let isMounted = true;
+    setGpsStatus("capturing");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (!isMounted) return;
+        setGpsStatus("captured");
+        setGpsEvidence({
+          gpsLat: position.coords.latitude,
+          gpsLng: position.coords.longitude,
+          gpsAccuracyM: position.coords.accuracy,
+          gpsCapturedAt: new Date(position.timestamp).toISOString(),
+          gpsStatus: "captured",
+        });
+      },
+      (error) => {
+        if (!isMounted) return;
+        const nextStatus = mapGeolocationError(error);
+        setGpsStatus(nextStatus);
+        setGpsEvidence(buildUnavailableGpsEvidence(nextStatus));
+      },
+      {
+        enableHighAccuracy: false,
+        maximumAge: 60000,
+        timeout: 10000,
+      },
+    );
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   function handleReadyChange(id: string, ready: boolean) {
     setReadyImages((current) => ({ ...current, [id]: ready }));
   }
@@ -128,6 +203,7 @@ export default function NewReceiptPage() {
       const receipt = await createDraftWoodReceipt({
         supabase,
         supplierId: selectedSupplierId,
+        gps: gpsEvidence,
       });
 
       await uploadReceiptImages({
@@ -193,7 +269,7 @@ export default function NewReceiptPage() {
         <div className="flex justify-between"><span className="text-slate-500">Receipt</span><strong>สร้างอัตโนมัติ</strong></div>
         <div className="flex justify-between"><span className="text-slate-500">Employee</span><strong>{employeeName}</strong></div>
         <div className="flex justify-between"><span className="text-slate-500">Date Time</span><strong>{new Date().toLocaleString("th-TH")}</strong></div>
-        <div className="flex justify-between"><span className="text-slate-500">GPS</span><strong>รอตำแหน่ง</strong></div>
+        <div className="flex justify-between gap-3"><span className="text-slate-500">GPS</span><strong className="text-right">{gpsLabel}</strong></div>
       </section>
 
       <section className="mb-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-soft">
