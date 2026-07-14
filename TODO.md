@@ -49,22 +49,20 @@ Last reviewed: 2026-07-14
   - `employee_profiles`
 - Storage foundation exists for private `wood-receipts` bucket.
 - Basic authenticated RLS policies exist, but not full role-based RLS.
-- New receipt page can select supplier, require 3 images, create a draft receipt, resize images to JPEG, upload to Supabase Storage, and insert image metadata.
-- Review list loads pending review receipts from Supabase.
+- New receipt page can select supplier, capture optional GPS evidence, require 3 images, create a draft receipt, resize images to JPEG, upload to Supabase Storage, and insert image metadata.
+- Review list loads pending/manual review receipts from Supabase.
 - Review detail loads receipt, images, AI analysis, and can approve/reject through an API route.
 - AI analysis server API exists and calls server-side provider logic.
 - AI provider code supports OpenAI/Claude-style provider selection and stores structured results.
 - n8n dispatch tracking fields and dispatch route/library exist.
 - Admin status page exists for smoke-test visibility across receipt, AI, review, and n8n status.
+- Inbound scale, unload, outbound scale, and reports now read/write real Supabase records for the core receipt workflow.
 
 ### Still Mock or Placeholder
 
-- `/wood/inbound-scale` still uses mock receipt data and placeholder form only.
-- `/wood/outbound-scale` still uses mock receipt data and placeholder form only.
-- `/wood/reports` still shows static KPI/sample data.
-- Some pages/components still depend on `lib/mock-data.ts`.
-- Unload page displays pending jobs from Supabase but confirm unload is currently local UI state, not persisted to database.
-- GPS capture is shown as pending/waiting in the new receipt UI, but metadata persistence for GPS was not verified in code.
+- `/wood/admin` is still a placeholder for users, roles, grade rules, and reopen jobs.
+- `components/ReceiptCard.tsx` still depends on `lib/mock-data.ts`, but current active workflow pages no longer import it.
+- Full role-scoped admin screens are not implemented yet.
 
 ## Known Gaps and Risks
 
@@ -84,7 +82,7 @@ Last reviewed: 2026-07-14
 - Baseline verification now passes: `npm run typecheck`, `npm run lint`, and `npm run build`.
 - No automated test suite was found beyond package scripts.
 - Supabase migrations are forward migrations only; reversibility was not verified.
-- Audit coverage exists for review decision but not yet verified for every required action.
+- Audit coverage exists for AI, inbound scale, unload, review decision, and outbound scale. Full audit coverage still needs a focused verification pass.
 
 ## Priority TODO
 
@@ -97,29 +95,32 @@ Last reviewed: 2026-07-14
 - [x] Decide canonical workflow status values. See `docs/36_Canonical_Workflow_and_Image_Types.md`.
 - [x] Decide canonical image type names. See `docs/36_Canonical_Workflow_and_Image_Types.md`.
 
-- [ ] Align workflow status values across database defaults, UI, APIs, mock data, and existing records.
-- [ ] Align image type values across DB rows, storage paths, AI analysis, review UI, and storage policies.
+- [x] Align workflow status values across active UI and APIs with canonical snake_case values.
+- [x] Align image type values across active upload, AI analysis, preview UI, and review UI with canonical values.
+- [ ] Backfill or compatibility-check existing legacy database records before production cutover.
 
 ### P1 - Complete Core Receipt Flow
 
-- [ ] New receipt: persist GPS latitude/longitude and captured timestamps as required by PR#3.
-- [ ] New receipt: after image upload, transition from draft/submitted into the next workflow state intentionally.
-- [ ] New receipt: trigger AI analysis or queue processing after the required image set is complete.
-- [ ] AI analysis: confirm raw JSON, normalized fields, warnings, errors, and audit logs are stored.
-- [ ] AI failure handling: mark active receipt as AI Failed or Pending Manual Review and preserve retry path.
-- [ ] Review: verify approve/reject updates workflow status, final grade, notes, reviewer, and audit log.
+- [x] New receipt: persist GPS latitude/longitude and captured timestamps as required by PR#3.
+- [x] New receipt: after image upload, transition from draft/submitted into the next workflow state intentionally.
+- [x] New receipt: trigger AI analysis or queue processing after the required image set is complete.
+- [x] AI analysis: confirm normalized fields, warnings, errors, and audit logs are stored.
+- [x] AI failure handling: mark active receipt as Pending Manual Review and preserve manual review path.
+- [x] Review: verify approve/reject updates workflow status, final grade, notes, reviewer, and audit log.
 - [ ] Review: add explicit Adjust / Need Retake Photo / manual correction path if still required.
+- [ ] AI analysis: confirm raw provider JSON is preserved if required for audit/debugging.
 
 ### P2 - Operational Workflow
 
-- [ ] Inbound scale: replace mock page with Supabase-backed queue.
-- [ ] Inbound scale: save scale ticket number, gross weight, inbound user, inbound time, and audit log.
-- [ ] Inbound scale: validate required ticket number, positive weight, duplicate ticket warning/block, and closed-receipt guard.
-- [ ] Unload: persist unloading location, unloaded_by, unloaded_by_name, unloaded timestamp, and audit log.
-- [ ] Unload: transition receipt to Pending Review after confirm.
-- [ ] Outbound scale: replace mock page with Supabase-backed queue.
-- [ ] Outbound scale: save tare/outbound weight, calculate net weight, and close/advance the workflow.
-- [ ] History: verify it reads real data and supports useful filters.
+- [x] Inbound scale: replace mock page with Supabase-backed queue.
+- [x] Inbound scale: save scale ticket number, gross weight, inbound user, inbound time, and audit log.
+- [x] Inbound scale: validate required ticket number, positive weight, duplicate ticket block, and status guard.
+- [x] Unload: persist unloading location, unloaded_by, unloaded_by_name, unloaded timestamp, and audit log.
+- [x] Unload: transition receipt to Pending Review after confirm.
+- [x] Outbound scale: replace mock page with Supabase-backed queue.
+- [x] Outbound scale: save tare/outbound weight, calculate net weight, and close/advance the workflow.
+- [x] History: verify it reads real data and supports useful filters.
+- [ ] Add explicit duplicate ticket pre-check/warning before submit if needed for UX.
 
 ### P3 - Security and Access Control
 
@@ -132,7 +133,7 @@ Last reviewed: 2026-07-14
 
 ### P4 - Reports, Monitoring, and Ops
 
-- [ ] Replace static reports with Supabase-backed daily/monthly summaries.
+- [x] Replace static reports with Supabase-backed daily summaries.
 - [ ] Add grade summary, supplier report, Excel export, and dashboard data.
 - [ ] Add monitoring for AI failures, n8n failures, upload failures, and migration status.
 - [ ] Prepare backup/restore verification checklist.
@@ -154,4 +155,4 @@ Last reviewed: 2026-07-14
 
 ## Next Best Action
 
-Continue P0 by deciding canonical workflow status values and canonical image type names, then align docs, database fields, UI, APIs, and mock data before adding more workflow logic.
+Next best action: replace `/wood/admin` placeholder with a real admin operations view for roles, workflow counts, failed AI/n8n monitoring, and reopen-readiness notes; then begin role-scoped RLS work.
