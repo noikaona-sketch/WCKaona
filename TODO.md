@@ -128,6 +128,7 @@ Last reviewed: 2026-07-14
 - [ ] Implement full role model: field_team, unload_team, inspector, inbound_scale, outbound_scale, accounting, purchasing, admin.
 - [x] Add canonical employee role field and shared TypeScript role constants. See `docs/37_Role_Model_and_RLS_Rollout.md`.
 - [x] Add SQL helper functions for future role-scoped RLS policies.
+- [x] Add cutover-safe API role guards for inbound scale, unload, review, and outbound scale writes.
 - [ ] Replace broad authenticated RLS with role-scoped policies.
 - [ ] Verify no service-role key or AI key can reach client bundles.
 - [ ] Enforce closed receipts cannot be modified except through a controlled reopen/admin path.

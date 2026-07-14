@@ -29,14 +29,22 @@ Use these values in `employee_profiles.role`:
   - `public.current_employee_has_role(text[])`
 - The app has shared TypeScript role constants in `lib/employee-roles.ts`.
 - `/wood/admin` shows the signed-in user's role from their employee profile.
+- Core write APIs have a shared `requireEmployeeRole` guard:
+  - Inbound scale: `inbound_scale`, `admin`
+  - Unload confirm: `unload_team`, `admin`
+  - Review decision: `inspector`, `admin`
+  - Outbound scale: `outbound_scale`, `admin`
+- Role guard enforcement is controlled by `ROLE_GUARDS_ENABLED=true`. When it is not enabled, APIs continue working but audit metadata records the actor role and enforcement state.
 - Existing broad authenticated RLS policies remain in place for now to avoid interrupting the working core flow.
 
 ## Rollout Order
 
-1. Assign real roles to all active users in `employee_profiles`.
-2. Replace broad authenticated RLS with route/action-specific policies.
-3. Move client-side write flows behind API routes where audit and role checks are required.
-4. Verify each role with a UAT account before production cutover.
+1. Apply role migrations in Supabase.
+2. Assign real roles to all active users in `employee_profiles`.
+3. Run the core workflow with `ROLE_GUARDS_ENABLED` unset and confirm audit metadata contains expected roles.
+4. Enable `ROLE_GUARDS_ENABLED=true` in a staging environment and verify each role with a UAT account.
+5. Replace broad authenticated RLS with route/action-specific policies.
+6. Move remaining client-side write flows behind API routes where audit and role checks are required.
 
 ## Guardrails
 

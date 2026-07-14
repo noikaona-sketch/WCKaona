@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { getEmployeeNameByUserId } from "@/lib/employee-profile";
+import { requireEmployeeRole } from "@/lib/api/require-employee-role";
 import { normalizeReceiptStatus } from "@/lib/receipt-status";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -8,35 +7,6 @@ type OutboundScaleRequest = {
   receiptId?: unknown;
   outboundWeightKg?: unknown;
 };
-
-function createUserScopedClient(accessToken: string) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
-
-function getBearerToken(request: Request) {
-  const authorizationHeader = request.headers.get("authorization") || "";
-  const [scheme, token] = authorizationHeader.split(" ");
-
-  if (scheme.toLowerCase() !== "bearer" || !token) return null;
-  return token;
-}
 
 function parseWeight(value: unknown) {
   if (typeof value === "number") return value;
@@ -54,24 +24,21 @@ function parseOutboundScaleRequest(value: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const accessToken = getBearerToken(request);
-    if (!accessToken) {
-      return NextResponse.json({ error: "Missing authenticated Supabase session" }, { status: 401 });
-    }
-
     const { receiptId, outboundWeightKg } = parseOutboundScaleRequest(await request.json());
     if (!receiptId) return NextResponse.json({ error: "Missing receiptId" }, { status: 400 });
     if (!Number.isFinite(outboundWeightKg) || outboundWeightKg <= 0) {
       return NextResponse.json({ error: "outboundWeightKg must be greater than 0" }, { status: 400 });
     }
 
-    const userClient = createUserScopedClient(accessToken);
-    const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
+    const serverClient = createServerSupabaseClient();
+    const roleGuard = await requireEmployeeRole({
+      request,
+      serverClient,
+      allowedRoles: ["outbound_scale", "admin"],
+    });
+    if (!roleGuard.ok) return roleGuard.response;
 
-    if (userError || !userData.user) {
-      return NextResponse.json({ error: "Invalid or expired Supabase session" }, { status: 401 });
-    }
-
+    const { userClient, user, employeeName, employeeRole, roleGuardEnforced } = roleGuard.guard;
     const { data: receiptAccess, error: accessError } = await userClient
       .from("wood_receipts")
       .select("id")
@@ -84,7 +51,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Receipt not found or not accessible" }, { status: 404 });
     }
 
-    const serverClient = createServerSupabaseClient();
     const { data: beforeReceipt, error: beforeError } = await serverClient
       .from("wood_receipts")
       .select("id, status, inbound_weight_kg, outbound_weight_kg, net_weight_kg, outbound_at, outbound_by, outbound_by_name")
@@ -107,7 +73,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "outboundWeightKg must be less than inbound weight" }, { status: 400 });
     }
 
-    const outboundByName = await getEmployeeNameByUserId(serverClient, userData.user.id, userData.user.email || "");
     const outboundAt = new Date().toISOString();
     const netWeightKg = inboundWeightKg - outboundWeightKg;
     const updatePayload = {
@@ -115,8 +80,8 @@ export async function POST(request: Request) {
       outbound_weight_kg: outboundWeightKg,
       net_weight_kg: netWeightKg,
       outbound_at: outboundAt,
-      outbound_by: userData.user.id,
-      outbound_by_name: outboundByName || null,
+      outbound_by: user.id,
+      outbound_by_name: employeeName || null,
     };
 
     const { data: updatedReceipt, error: updateError } = await serverClient
@@ -131,13 +96,13 @@ export async function POST(request: Request) {
 
     const { error: auditError } = await serverClient.from("audit_logs").insert({
       wood_receipt_id: receiptId,
-      actor_id: userData.user.id,
+      actor_id: user.id,
       action: "outbound_scale_saved",
       entity_type: "wood_receipts",
       entity_id: receiptId,
       before_data: beforeReceipt,
       after_data: updatePayload,
-      metadata: { source: "outbound_scale_api", actor_name: outboundByName || null },
+      metadata: { source: "outbound_scale_api", actor_name: employeeName || null, actor_role: employeeRole, role_guard_enforced: roleGuardEnforced },
     });
 
     if (auditError) {
