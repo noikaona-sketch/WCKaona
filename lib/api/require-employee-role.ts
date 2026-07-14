@@ -57,10 +57,12 @@ export async function requireEmployeeRole({
   request,
   serverClient,
   allowedRoles,
+  enforce,
 }: {
   request: Request;
   serverClient: SupabaseClient;
   allowedRoles: EmployeeRole[];
+  enforce?: boolean;
 }): Promise<{ ok: true; guard: EmployeeRoleGuard } | { ok: false; response: NextResponse }> {
   const accessToken = getBearerToken(request);
   if (!accessToken) {
@@ -86,7 +88,7 @@ export async function requireEmployeeRole({
   const profile = data as EmployeeProfileRow | null;
   const employeeRole = normalizeEmployeeRole(profile?.role);
   const employeeName = profile?.is_active && profile.display_name?.trim() ? profile.display_name.trim() : fallbackDisplayName(userData.user);
-  const roleGuardEnforced = isRoleGuardEnforced();
+  const roleGuardEnforced = enforce ?? isRoleGuardEnforced();
 
   if (roleGuardEnforced && (!profile?.is_active || !allowedRoles.includes(employeeRole))) {
     return {

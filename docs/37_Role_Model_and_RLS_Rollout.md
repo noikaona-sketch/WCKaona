@@ -35,16 +35,26 @@ Use these values in `employee_profiles.role`:
   - Review decision: `inspector`, `admin`
   - Outbound scale: `outbound_scale`, `admin`
 - Role guard enforcement is controlled by `ROLE_GUARDS_ENABLED=true`. When it is not enabled, APIs continue working but audit metadata records the actor role and enforcement state.
+- `/wood/admin` includes an Employee Roles section for admins to change `employee_profiles.role` and `is_active`.
+- `/api/admin/employee-profiles` always requires an active `admin` profile, even before `ROLE_GUARDS_ENABLED=true`.
 - Existing broad authenticated RLS policies remain in place for now to avoid interrupting the working core flow.
 
 ## Rollout Order
 
 1. Apply role migrations in Supabase.
-2. Assign real roles to all active users in `employee_profiles`.
-3. Run the core workflow with `ROLE_GUARDS_ENABLED` unset and confirm audit metadata contains expected roles.
-4. Enable `ROLE_GUARDS_ENABLED=true` in a staging environment and verify each role with a UAT account.
-5. Replace broad authenticated RLS with route/action-specific policies.
-6. Move remaining client-side write flows behind API routes where audit and role checks are required.
+2. Bootstrap the first admin by updating one trusted active profile directly in Supabase:
+
+```sql
+update public.employee_profiles
+set role = 'admin'
+where employee_code = 'YOUR_ADMIN_EMPLOYEE_CODE';
+```
+
+3. Use `/wood/admin` to assign real roles to all active users in `employee_profiles`.
+4. Run the core workflow with `ROLE_GUARDS_ENABLED` unset and confirm audit metadata contains expected roles.
+5. Enable `ROLE_GUARDS_ENABLED=true` in a staging environment and verify each role with a UAT account.
+6. Replace broad authenticated RLS with route/action-specific policies.
+7. Move remaining client-side write flows behind API routes where audit and role checks are required.
 
 ## Guardrails
 

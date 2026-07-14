@@ -129,6 +129,8 @@ Last reviewed: 2026-07-14
 - [x] Add canonical employee role field and shared TypeScript role constants. See `docs/37_Role_Model_and_RLS_Rollout.md`.
 - [x] Add SQL helper functions for future role-scoped RLS policies.
 - [x] Add cutover-safe API role guards for inbound scale, unload, review, and outbound scale writes.
+- [x] Add admin role management API/UI for assigning employee roles before enforcement.
+- [ ] Bootstrap first admin profile in Supabase, then assign real roles to all active users.
 - [ ] Replace broad authenticated RLS with role-scoped policies.
 - [ ] Verify no service-role key or AI key can reach client bundles.
 - [ ] Enforce closed receipts cannot be modified except through a controlled reopen/admin path.
