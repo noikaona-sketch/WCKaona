@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getEmployeeNameByUserId } from "@/lib/employee-profile";
+import { normalizeReceiptStatus } from "@/lib/receipt-status";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type ReviewRequest = {
@@ -88,16 +89,21 @@ export async function POST(request: Request) {
     const serverClient = createServerSupabaseClient();
     const { data: beforeReceipt, error: beforeError } = await serverClient
       .from("wood_receipts")
-      .select("id, review_status, reviewed_grade, reviewer_note, reviewed_at, reviewed_by_name")
+      .select("id, status, review_status, reviewed_grade, reviewer_note, reviewed_at, reviewed_by_name")
       .eq("id", receiptId)
       .is("deleted_at", null)
       .single();
 
     if (beforeError) throw beforeError;
 
+    if (normalizeReceiptStatus(beforeReceipt.status) !== "pending_review") {
+      return NextResponse.json({ error: "Receipt is not waiting for review" }, { status: 409 });
+    }
+
     const reviewerName = await getEmployeeNameByUserId(serverClient, userData.user.id, userData.user.email || "");
     const reviewedAt = new Date().toISOString();
     const updatePayload = {
+      status: reviewStatus === "approved" ? "pending_outbound_scale" : "rejected",
       review_status: reviewStatus,
       reviewed_grade: reviewedGrade || null,
       reviewer_note: reviewerNote || null,
@@ -111,7 +117,7 @@ export async function POST(request: Request) {
       .update(updatePayload)
       .eq("id", receiptId)
       .is("deleted_at", null)
-      .select("id, review_status, reviewed_grade, reviewer_note, reviewed_at, reviewed_by_name")
+      .select("id, status, review_status, reviewed_grade, reviewer_note, reviewed_at, reviewed_by_name")
       .single();
 
     if (updateError) throw updateError;

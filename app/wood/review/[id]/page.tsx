@@ -60,6 +60,7 @@ type SignedImage = ReceiptImage & {
 
 type ReviewSaveResponse = {
   id: string;
+  status: string;
   review_status: ReviewStatus;
   reviewed_grade: string | null;
   reviewer_note: string | null;
@@ -248,7 +249,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
           isAuthenticated ? (
             <div className="flex flex-col items-end gap-2">
               <LogoutButton />
-              <StatusBadge status="Pending Review" />
+              <StatusBadge status={receipt?.status || "pending_review"} />
             </div>
           ) : null
         }
@@ -265,7 +266,7 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
                 <p className="text-xs font-black uppercase text-brand-primary">Receipt Summary</p>
                 <h2 className="text-lg font-bold text-[#14213d]">{receipt.receipt_no}</h2>
               </div>
-              <StatusBadge status="Pending Review" />
+              <StatusBadge status={receipt.status} />
             </div>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div><dt className="text-slate-500">ทะเบียน</dt><dd className="font-semibold text-slate-900">{receipt.truck_plate || analysis?.truck_plate || "-"}</dd></div>

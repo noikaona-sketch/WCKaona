@@ -69,6 +69,7 @@ export default function ReviewListPage() {
           .select("id, receipt_no, truck_plate, status, review_status, inbound_weight_kg, moisture_percent, received_at, created_by_name, ai_analysis(suggested_grade, confidence), receipt_images(image_type, file_path, file_name)")
           .is("deleted_at", null)
           .eq("review_status", "pending")
+          .in("status", ["pending_review", "Pending Review"])
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -107,7 +108,7 @@ export default function ReviewListPage() {
                   <p className="text-sm text-slate-500">ทะเบียน {receipt.truck_plate || "-"}</p>
                   <p className="text-xs font-semibold text-slate-400">Created by {receipt.created_by_name || "-"}</p>
                 </div>
-                <StatusBadge status="Pending Review" />
+                <StatusBadge status={receipt.status} />
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-sm">
                 <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">AI Grade</p><p className="text-lg font-bold">{analysis?.suggested_grade || "-"}</p></div>
