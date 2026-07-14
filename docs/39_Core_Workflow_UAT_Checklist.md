@@ -80,7 +80,7 @@ For the completed receipt, verify:
 | GPS denied | Receipt creation still works; `gps_status = 'permission_denied'`. |
 | AI fails | Receipt moves to `pending_manual_review`; review queue can open it. |
 | Review rejected | Reviewer note is required; status becomes `rejected`; receipt does not enter outbound queue. |
-| Duplicate scale ticket | Inbound API returns conflict and does not change the receipt. |
+| Duplicate scale ticket | Inbound page warns before submit; inbound API still returns conflict and does not change the receipt if submitted anyway. |
 | Outbound weight greater than or equal to inbound weight | Outbound API rejects the save. |
 | Receipt not in expected status | API returns conflict and does not change the receipt. |
 | n8n dispatch failure | Admin watch list shows failure status when dispatch status is `failed`. |

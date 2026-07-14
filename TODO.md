@@ -121,7 +121,7 @@ Last reviewed: 2026-07-15
 - [x] Outbound scale: replace mock page with Supabase-backed queue.
 - [x] Outbound scale: save tare/outbound weight, calculate net weight, and close/advance the workflow.
 - [x] History: verify it reads real data and supports useful filters.
-- [ ] Add explicit duplicate ticket pre-check/warning before submit if needed for UX.
+- [x] Add explicit duplicate ticket pre-check/warning before submit.
 
 ### P3 - Security and Access Control
 

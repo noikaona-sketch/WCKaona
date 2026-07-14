@@ -28,6 +28,11 @@ type InboundScaleResponse = {
   detail?: string;
 };
 
+type DuplicateTicketWarning = {
+  isChecking: boolean;
+  message: string;
+};
+
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString("th-TH") : "-";
 }
@@ -44,6 +49,7 @@ function parsePositiveWeight(value: string) {
 export default function InboundScalePage() {
   const [receipts, setReceipts] = useState<InboundReceipt[]>([]);
   const [ticketNumbers, setTicketNumbers] = useState<Record<string, string>>({});
+  const [ticketWarnings, setTicketWarnings] = useState<Record<string, DuplicateTicketWarning>>({});
   const [grossWeights, setGrossWeights] = useState<Record<string, string>>({});
   const [savingReceipts, setSavingReceipts] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState("กำลังโหลดงานรอชั่งขาเข้า");
@@ -95,11 +101,47 @@ export default function InboundScalePage() {
     };
   }, []);
 
+  async function checkDuplicateTicket(receiptId: string, ticketValue: string) {
+    const scaleTicketNo = ticketValue.trim();
+
+    if (!scaleTicketNo) {
+      setTicketWarnings((current) => ({ ...current, [receiptId]: { isChecking: false, message: "" } }));
+      return "";
+    }
+
+    setTicketWarnings((current) => ({ ...current, [receiptId]: { isChecking: true, message: "" } }));
+
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data, error } = await supabase
+        .from("wood_receipts")
+        .select("id, receipt_no")
+        .eq("scale_ticket_no", scaleTicketNo)
+        .neq("id", receiptId)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const warningMessage = data?.id ? `เลขตั๋วชั่งนี้ถูกใช้แล้วใน ${data.receipt_no || "receipt อื่น"}` : "";
+      setTicketWarnings((current) => ({ ...current, [receiptId]: { isChecking: false, message: warningMessage } }));
+      return warningMessage;
+    } catch (error) {
+      const warningMessage = error instanceof Error ? error.message : "ตรวจเลขตั๋วชั่งไม่สำเร็จ";
+      setTicketWarnings((current) => ({ ...current, [receiptId]: { isChecking: false, message: warningMessage } }));
+      return warningMessage;
+    }
+  }
+
   async function handleSaveInboundScale(receiptId: string) {
     const scaleTicketNo = (ticketNumbers[receiptId] || "").trim();
     const grossWeightKg = parsePositiveWeight(grossWeights[receiptId] || "");
 
     if (!scaleTicketNo || !grossWeightKg || savingReceipts[receiptId]) return;
+
+    const duplicateWarning = await checkDuplicateTicket(receiptId, scaleTicketNo);
+    if (duplicateWarning) return;
 
     setSavingReceipts((current) => ({ ...current, [receiptId]: true }));
     setMessage("");
@@ -148,10 +190,17 @@ export default function InboundScalePage() {
 
         {receipts.map((receipt) => {
           const ticketNumber = ticketNumbers[receipt.id] || "";
+          const ticketWarning = ticketWarnings[receipt.id] || { isChecking: false, message: "" };
           const grossWeight = grossWeights[receipt.id] || "";
           const parsedWeight = parsePositiveWeight(grossWeight);
           const isSaving = Boolean(savingReceipts[receipt.id]);
-          const canSave = ticketNumber.trim().length > 0 && ticketNumber.trim().length <= 50 && Boolean(parsedWeight) && !isSaving;
+          const canSave =
+            ticketNumber.trim().length > 0 &&
+            ticketNumber.trim().length <= 50 &&
+            Boolean(parsedWeight) &&
+            !ticketWarning.isChecking &&
+            !ticketWarning.message &&
+            !isSaving;
 
           return (
             <article key={receipt.id} className="rounded-3xl bg-white p-5 shadow-soft">
@@ -188,10 +237,16 @@ export default function InboundScalePage() {
                     <input
                       id={`ticket-${receipt.id}`}
                       value={ticketNumber}
-                      onChange={(event) => setTicketNumbers((current) => ({ ...current, [receipt.id]: event.target.value.slice(0, 50) }))}
+                      onBlur={(event) => checkDuplicateTicket(receipt.id, event.target.value)}
+                      onChange={(event) => {
+                        setTicketNumbers((current) => ({ ...current, [receipt.id]: event.target.value.slice(0, 50) }));
+                        setTicketWarnings((current) => ({ ...current, [receipt.id]: { isChecking: false, message: "" } }));
+                      }}
                       className="h-12 rounded-2xl border border-slate-200 bg-white px-4 font-semibold text-slate-950 outline-none focus:border-brand-primary"
                       placeholder="IN-20260605-001"
                     />
+                    {ticketWarning.isChecking ? <span className="text-xs font-semibold text-slate-500">กำลังตรวจเลขตั๋วชั่ง</span> : null}
+                    {ticketWarning.message ? <span className="text-xs font-semibold text-brand-danger">{ticketWarning.message}</span> : null}
                   </label>
 
                   <label className="mt-3 grid gap-2 text-sm" htmlFor={`gross-${receipt.id}`}>
