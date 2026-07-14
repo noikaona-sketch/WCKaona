@@ -23,6 +23,16 @@ type UnloadReceipt = {
   receipt_images: ReceiptPreviewImage[] | null;
 };
 
+type UnloadConfirmResponse = {
+  id?: string;
+  status?: string;
+  unloading_location?: string | null;
+  unloaded_at?: string | null;
+  unloaded_by_name?: string | null;
+  error?: string;
+  detail?: string;
+};
+
 function formatNumber(value: number | null) {
   return value === null ? "-" : value.toLocaleString();
 }
@@ -36,6 +46,7 @@ export default function UnloadPage() {
   const [selectedLocations, setSelectedLocations] = useState<Record<string, string>>({});
   const [customLocations, setCustomLocations] = useState<Record<string, string>>({});
   const [confirmedLocations, setConfirmedLocations] = useState<Record<string, string>>({});
+  const [savingReceipts, setSavingReceipts] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState("กำลังโหลดงานรอลงสินค้า");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginRequired, setLoginRequired] = useState(false);
@@ -63,7 +74,7 @@ export default function UnloadPage() {
           .from("wood_receipts")
           .select("id, receipt_no, truck_plate, status, inbound_weight_kg, moisture_percent, received_at, receipt_images(image_type, file_path, file_name)")
           .is("deleted_at", null)
-          .eq("status", "Pending Unload")
+          .in("status", ["pending_unload", "Pending Unload"])
           .order("created_at", { ascending: false })
           .limit(20);
 
@@ -91,12 +102,44 @@ export default function UnloadPage() {
     return (selectedLocation === "อื่น ๆ" ? customLocation : selectedLocation).trim();
   }
 
-  function handleConfirmUnload(receiptId: string) {
+  async function handleConfirmUnload(receiptId: string) {
     const unloadingLocation = getTrimmedLocation(receiptId);
-    if (!unloadingLocation || unloadingLocation.length > 100) return;
+    if (!unloadingLocation || unloadingLocation.length > 100 || savingReceipts[receiptId]) return;
 
-    setConfirmedLocations((current) => ({ ...current, [receiptId]: unloadingLocation }));
-    setCustomLocations((current) => ({ ...current, [receiptId]: current[receiptId]?.trim() || "" }));
+    setSavingReceipts((current) => ({ ...current, [receiptId]: true }));
+    setMessage("");
+
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+      if (!sessionData.session?.access_token) throw new Error("กรุณาเข้าสู่ระบบก่อนยืนยันลงสินค้า");
+
+      const response = await fetch("/api/unload/confirm", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receiptId,
+          unloadingLocation,
+        }),
+      });
+
+      const responseBody = (await response.json()) as UnloadConfirmResponse;
+      if (!response.ok) throw new Error(responseBody.detail || responseBody.error || "ยืนยันลงสินค้าไม่สำเร็จ");
+
+      setConfirmedLocations((current) => ({ ...current, [receiptId]: unloadingLocation }));
+      setCustomLocations((current) => ({ ...current, [receiptId]: current[receiptId]?.trim() || "" }));
+      setPendingReceipts((current) => current.filter((receipt) => receipt.id !== receiptId));
+      setMessage("ยืนยันลงสินค้าแล้ว และส่งต่องานไปยังผู้ตรวจ");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ยืนยันลงสินค้าไม่สำเร็จ");
+    } finally {
+      setSavingReceipts((current) => ({ ...current, [receiptId]: false }));
+    }
   }
 
   return (
@@ -112,6 +155,7 @@ export default function UnloadPage() {
           const showCustomLocation = selectedLocation === "อื่น ๆ";
           const isLocationValid = unloadingLocation.length > 0 && unloadingLocation.length <= 100;
           const customTooLong = showCustomLocation && customLocation.trim().length > 100;
+          const isSaving = Boolean(savingReceipts[receipt.id]);
 
           return (
             <div key={receipt.id} className="space-y-3">
@@ -121,7 +165,7 @@ export default function UnloadPage() {
                     <p className="font-semibold text-slate-950">{receipt.receipt_no}</p>
                     <p className="text-sm text-slate-500">ทะเบียน {receipt.truck_plate || "-"} · {formatDate(receipt.received_at)}</p>
                   </div>
-                  <StatusBadge status="Pending Unload" />
+                  <StatusBadge status={receipt.status} />
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-center text-sm">
                   <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">Gross</p><p className="text-lg font-bold">{formatNumber(receipt.inbound_weight_kg)}</p></div>
@@ -172,11 +216,11 @@ export default function UnloadPage() {
 
               <button
                 type="button"
-                disabled={!isLocationValid}
+                disabled={!isLocationValid || isSaving}
                 onClick={() => handleConfirmUnload(receipt.id)}
                 className="h-12 w-full rounded-2xl bg-brand-success font-bold text-white shadow-soft disabled:bg-slate-300"
               >
-                Confirm Unload
+                {isSaving ? "Saving..." : "Confirm Unload"}
               </button>
             </div>
           );
