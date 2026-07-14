@@ -48,7 +48,7 @@ Last reviewed: 2026-07-14
   - `audit_logs`
   - `employee_profiles`
 - Storage foundation exists for private `wood-receipts` bucket.
-- Basic authenticated RLS policies exist, but not full role-based RLS.
+- Basic authenticated RLS policies exist, and employee profiles now have a canonical `role` field. Full role-based RLS is not active yet.
 - New receipt page can select supplier, capture optional GPS evidence, require 3 images, create a draft receipt, resize images to JPEG, upload to Supabase Storage, and insert image metadata.
 - Review list loads pending/manual review receipts from Supabase.
 - Review detail loads receipt, images, AI analysis, and can approve/reject through an API route.
@@ -57,16 +57,17 @@ Last reviewed: 2026-07-14
 - n8n dispatch tracking fields and dispatch route/library exist.
 - Admin status page exists for smoke-test visibility across receipt, AI, review, and n8n status.
 - Inbound scale, unload, outbound scale, and reports now read/write real Supabase records for the core receipt workflow.
+- `/wood/admin` now reads real operational data and shows workflow counts, watch-list items, recent receipts, and the signed-in employee role.
 
 ### Still Mock or Placeholder
 
-- `/wood/admin` is still a placeholder for users, roles, grade rules, and reopen jobs.
 - `components/ReceiptCard.tsx` still depends on `lib/mock-data.ts`, but current active workflow pages no longer import it.
 - Full role-scoped admin screens are not implemented yet.
+- Users, roles, grade rules, and reopen jobs still do not have dedicated management screens/APIs.
 
 ## Known Gaps and Risks
 
-- Role-based access is incomplete. Current RLS is broad authenticated access, not the detailed roles from the spec.
+- Role-based access is incomplete. Employee roles now exist, but current RLS is still broad authenticated access, not the detailed policies from the spec.
 - Workflow status transitions are inconsistent; canonical values are now documented in `docs/36_Canonical_Workflow_and_Image_Types.md`:
   - Specs use statuses like `Pending Inbound Scale`, `Pending Unload`, `Pending Review`, `Closed`.
   - Database default uses lowercase `draft`.
@@ -125,6 +126,8 @@ Last reviewed: 2026-07-14
 ### P3 - Security and Access Control
 
 - [ ] Implement full role model: field_team, unload_team, inspector, inbound_scale, outbound_scale, accounting, purchasing, admin.
+- [x] Add canonical employee role field and shared TypeScript role constants. See `docs/37_Role_Model_and_RLS_Rollout.md`.
+- [x] Add SQL helper functions for future role-scoped RLS policies.
 - [ ] Replace broad authenticated RLS with role-scoped policies.
 - [ ] Verify no service-role key or AI key can reach client bundles.
 - [ ] Enforce closed receipts cannot be modified except through a controlled reopen/admin path.
@@ -135,7 +138,8 @@ Last reviewed: 2026-07-14
 
 - [x] Replace static reports with Supabase-backed daily summaries.
 - [ ] Add grade summary, supplier report, Excel export, and dashboard data.
-- [ ] Add monitoring for AI failures, n8n failures, upload failures, and migration status.
+- [x] Add monitoring view for AI/manual-review and n8n failures in `/wood/admin`.
+- [ ] Add monitoring for upload failures and migration status.
 - [ ] Prepare backup/restore verification checklist.
 - [ ] Prepare UAT checklist mapped to the core workflow.
 
@@ -155,4 +159,4 @@ Last reviewed: 2026-07-14
 
 ## Next Best Action
 
-Next best action: replace `/wood/admin` placeholder with a real admin operations view for roles, workflow counts, failed AI/n8n monitoring, and reopen-readiness notes; then begin role-scoped RLS work.
+Next best action: assign real roles to active users, then replace broad authenticated RLS with role-scoped policies in small route-by-route steps.

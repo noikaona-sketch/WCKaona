@@ -1,8 +1,10 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { normalizeEmployeeRole, type EmployeeRole } from "@/lib/employee-roles";
 
 type EmployeeProfile = {
   display_name: string | null;
   is_active: boolean | null;
+  role?: string | null;
 };
 
 function fallbackDisplayName(user: User | null) {
@@ -14,11 +16,11 @@ export async function getCurrentEmployeeName(supabase: SupabaseClient) {
   if (userError) throw userError;
 
   const user = userData.user;
-  if (!user) return { userId: null, displayName: "" };
+  if (!user) return { userId: null, displayName: "", role: "field_team" as const };
 
   const { data, error } = await supabase
     .from("employee_profiles")
-    .select("display_name, is_active")
+    .select("display_name, is_active, role")
     .eq("user_id", user.id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -28,7 +30,7 @@ export async function getCurrentEmployeeName(supabase: SupabaseClient) {
   const profile = data as EmployeeProfile | null;
   const displayName = profile?.is_active && profile.display_name?.trim() ? profile.display_name.trim() : fallbackDisplayName(user);
 
-  return { userId: user.id, displayName };
+  return { userId: user.id, displayName, role: normalizeEmployeeRole(profile?.role) };
 }
 
 export async function getEmployeeNameByUserId(supabase: SupabaseClient, userId: string, fallbackName = "") {
@@ -43,4 +45,17 @@ export async function getEmployeeNameByUserId(supabase: SupabaseClient, userId: 
 
   const profile = data as EmployeeProfile | null;
   return profile?.is_active && profile.display_name?.trim() ? profile.display_name.trim() : fallbackName.trim();
+}
+
+export async function getCurrentEmployeeProfile(supabase: SupabaseClient): Promise<{
+  userId: string | null;
+  displayName: string;
+  role: EmployeeRole;
+}> {
+  const employee = await getCurrentEmployeeName(supabase);
+  return {
+    userId: employee.userId,
+    displayName: employee.displayName,
+    role: employee.role,
+  };
 }
