@@ -16,6 +16,13 @@ type SupplierOption = {
   supplier_code: string;
 };
 
+type AiAnalyzeResponse = {
+  error?: string;
+  receipt?: {
+    status?: string;
+  };
+};
+
 const requiredImages: Array<{ id: RequiredReceiptImageId; title: string; description: string }> = [
   { id: "truck_plate", title: "ทะเบียนรถ", description: "Truck Plate" },
   { id: "moisture_meter", title: "เครื่องวัดความชื้น", description: "Moisture Meter" },
@@ -129,7 +136,22 @@ export default function NewReceiptPage() {
         files,
       });
 
-      setUploadMessage(`สร้าง draft receipt ${receipt.receipt_no} และบันทึกรูปครบแล้ว`);
+      const aiResponse = await fetch("/api/ai/analyze-receipt", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ receiptId: receipt.id }),
+      });
+      const aiResponseBody = (await aiResponse.json()) as AiAnalyzeResponse;
+
+      if (!aiResponse.ok) {
+        setUploadMessage(`สร้าง receipt ${receipt.receipt_no} และบันทึกรูปครบแล้ว แต่ AI ไม่สำเร็จ: ${aiResponseBody.error || "ส่งตรวจ manual review"}`);
+        return;
+      }
+
+      setUploadMessage(`สร้าง receipt ${receipt.receipt_no}, วิเคราะห์ AI แล้ว และส่งต่อห้องชั่งขาเข้า`);
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ");
     } finally {
