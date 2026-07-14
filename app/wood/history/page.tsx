@@ -9,26 +9,10 @@ import { MobileHeader } from "@/components/MobileHeader";
 import { ReceiptImagePreviewCards } from "@/components/ReceiptImagePreviewCards";
 import type { ReceiptPreviewImage } from "@/components/ReceiptImagePreviewCards";
 import { StatusBadge } from "@/components/StatusBadge";
+import { normalizeReceiptStatus, type ReceiptStatus } from "@/lib/receipt-status";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import type { ReceiptStatus } from "@/lib/mock-data";
 
 const filters = ["Today", "Approved", "Closed"] as const;
-const knownStatuses: ReceiptStatus[] = [
-  "Draft",
-  "Submitted",
-  "AI Processing",
-  "Pending Inbound Scale",
-  "Pending Unload",
-  "Pending Review",
-  "Approved",
-  "Pending Outbound Scale",
-  "Net Weight Completed",
-  "Closed",
-  "Rejected",
-  "Need Retake Photo",
-  "Need Scale Correction",
-  "Reopened",
-];
 
 type HistoryFilter = (typeof filters)[number];
 
@@ -59,9 +43,9 @@ function startOfTodayIso() {
 }
 
 function getDisplayStatus(receipt: HistoryReceipt): ReceiptStatus {
-  if (receipt.review_status === "approved") return "Approved";
-  if (receipt.review_status === "rejected") return "Rejected";
-  return knownStatuses.includes(receipt.status as ReceiptStatus) ? (receipt.status as ReceiptStatus) : "Submitted";
+  if (receipt.review_status === "approved") return "approved";
+  if (receipt.review_status === "rejected") return "rejected";
+  return normalizeReceiptStatus(receipt.status || "submitted");
 }
 
 export default function HistoryPage() {
@@ -118,7 +102,7 @@ export default function HistoryPage() {
 
   const filteredReceipts = useMemo(() => {
     if (activeFilter === "Approved") return receipts.filter((receipt) => receipt.review_status === "approved");
-    if (activeFilter === "Closed") return receipts.filter((receipt) => receipt.status === "Closed");
+    if (activeFilter === "Closed") return receipts.filter((receipt) => normalizeReceiptStatus(receipt.status) === "closed");
     return receipts;
   }, [activeFilter, receipts]);
 

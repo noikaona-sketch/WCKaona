@@ -1,22 +1,30 @@
-import type { ReceiptStatus } from "@/lib/mock-data";
+import { normalizeReceiptStatus, receiptStatusLabels, type ReceiptStatus } from "@/lib/receipt-status";
 
 const toneByStatus: Record<ReceiptStatus, string> = {
-  Draft: "bg-slate-100 text-slate-700",
-  Submitted: "bg-blue-100 text-blue-700",
-  "AI Processing": "bg-yellow-100 text-yellow-800",
-  "Pending Inbound Scale": "bg-amber-100 text-amber-800",
-  "Pending Unload": "bg-orange-100 text-orange-800",
-  "Pending Review": "bg-orange-100 text-orange-800",
-  Approved: "bg-green-100 text-green-700",
-  "Pending Outbound Scale": "bg-amber-100 text-amber-800",
-  "Net Weight Completed": "bg-emerald-100 text-emerald-700",
-  Closed: "bg-emerald-200 text-emerald-900",
-  Rejected: "bg-red-100 text-red-700",
-  "Need Retake Photo": "bg-red-100 text-red-700",
-  "Need Scale Correction": "bg-red-100 text-red-700",
-  Reopened: "bg-purple-100 text-purple-700",
+  draft: "bg-slate-100 text-slate-700",
+  submitted: "bg-blue-100 text-blue-700",
+  ai_processing: "bg-yellow-100 text-yellow-800",
+  pending_inbound_scale: "bg-amber-100 text-amber-800",
+  pending_unload: "bg-orange-100 text-orange-800",
+  pending_review: "bg-orange-100 text-orange-800",
+  approved: "bg-green-100 text-green-700",
+  pending_outbound_scale: "bg-amber-100 text-amber-800",
+  net_weight_completed: "bg-emerald-100 text-emerald-700",
+  closed: "bg-emerald-200 text-emerald-900",
+  ai_failed: "bg-red-100 text-red-700",
+  pending_manual_review: "bg-red-100 text-red-700",
+  rejected: "bg-red-100 text-red-700",
+  need_retake_photo: "bg-red-100 text-red-700",
+  need_scale_correction: "bg-red-100 text-red-700",
+  reopened: "bg-purple-100 text-purple-700",
 };
 
-export function StatusBadge({ status }: { status: ReceiptStatus }) {
-  return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${toneByStatus[status]}`}>{status}</span>;
+export function StatusBadge({ status }: { status: string | null | undefined }) {
+  const normalizedStatus = normalizeReceiptStatus(status);
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${toneByStatus[normalizedStatus]}`}>
+      {receiptStatusLabels[normalizedStatus]}
+    </span>
+  );
 }

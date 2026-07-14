@@ -1,12 +1,18 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  isHighDetailReceiptImage,
+  normalizeReceiptImageType,
+  requiredReceiptImageTypes,
+  supportedReceiptImageTypes,
+  type ReceiptImageType,
+} from "@/lib/receipt-image-types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const BUCKET_NAME = "wood-receipts";
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
 const PROMPT_VERSION = "receipt-vision-v1";
-const REQUIRED_IMAGE_TYPES = ["size", "moisture", "license"] as const;
 const MAX_WARNINGS = 10;
 const MAX_WARNING_LENGTH = 200;
 const CM_PER_INCH = 2.54;
@@ -35,6 +41,10 @@ type ReceiptImageRow = {
   image_type: string;
   file_path: string;
   mime_type: string | null;
+};
+
+type NormalizedReceiptImageRow = ReceiptImageRow & {
+  normalizedImageType: ReceiptImageType;
 };
 
 type ImageDataUrl = {
@@ -237,23 +247,26 @@ async function fetchReceiptImages(supabase: SupabaseClient, receiptId: string) {
     .select("image_type, file_path, mime_type")
     .eq("wood_receipt_id", receiptId)
     .is("deleted_at", null)
-    .in("image_type", [...REQUIRED_IMAGE_TYPES]);
+    .in("image_type", [...supportedReceiptImageTypes]);
 
   if (error) throw error;
 
-  const images = (data ?? []) as ReceiptImageRow[];
-  const missingImageTypes = REQUIRED_IMAGE_TYPES.filter(
-    (imageType) => !images.some((image) => image.image_type === imageType),
+  const images = ((data ?? []) as ReceiptImageRow[]).map((image) => ({
+    ...image,
+    normalizedImageType: normalizeReceiptImageType(image.image_type),
+  }));
+  const missingImageTypes = requiredReceiptImageTypes.filter(
+    (imageType) => !images.some((image) => image.normalizedImageType === imageType),
   );
 
   if (missingImageTypes.length > 0) {
     throw new Error(`Missing receipt images: ${missingImageTypes.join(", ")}`);
   }
 
-  return REQUIRED_IMAGE_TYPES.map((imageType) => images.find((image) => image.image_type === imageType) as ReceiptImageRow);
+  return requiredReceiptImageTypes.map((imageType) => images.find((image) => image.normalizedImageType === imageType) as NormalizedReceiptImageRow);
 }
 
-async function downloadReceiptImageDataUrls(supabase: SupabaseClient, images: ReceiptImageRow[]) {
+async function downloadReceiptImageDataUrls(supabase: SupabaseClient, images: NormalizedReceiptImageRow[]) {
   return Promise.all(
     images.map(async (image) => {
       const mimeType = image.mime_type || "image/jpeg";
@@ -264,7 +277,7 @@ async function downloadReceiptImageDataUrls(supabase: SupabaseClient, images: Re
       const { base64Data } = splitDataUrl(imageUrl, mimeType);
 
       return {
-        imageType: image.image_type,
+        imageType: image.normalizedImageType,
         imageUrl,
         mimeType,
         base64Data,
@@ -297,7 +310,7 @@ async function requestOpenAIVisionAnalysis(imageDataUrls: ImageDataUrl[]): Promi
             ...imageDataUrls.map((image) => ({
               type: "input_image",
               image_url: image.imageUrl,
-              detail: image.imageType === "license" || image.imageType === "moisture" ? "high" : "auto",
+              detail: isHighDetailReceiptImage(image.imageType) ? "high" : "auto",
             })),
           ],
         },

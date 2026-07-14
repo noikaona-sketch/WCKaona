@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCurrentEmployeeName } from "@/lib/employee-profile";
+import type { ReceiptImageType } from "@/lib/receipt-image-types";
 
 export type RequiredReceiptImageId = "wood_load" | "moisture_meter" | "truck_plate";
 
@@ -10,10 +11,10 @@ const JPEG_MIME_TYPE = "image/jpeg";
 const MAX_IMAGE_WIDTH = 1600;
 const JPEG_QUALITY = 0.75;
 
-const imageConfig: Record<RequiredReceiptImageId, { fileName: string; imageType: string }> = {
-  wood_load: { fileName: "01_size.jpg", imageType: "size" },
-  moisture_meter: { fileName: "02_moisture.jpg", imageType: "moisture" },
-  truck_plate: { fileName: "03_license.jpg", imageType: "license" },
+const imageConfig: Record<RequiredReceiptImageId, { fileName: string; imageType: ReceiptImageType }> = {
+  wood_load: { fileName: "01_size.jpg", imageType: "wood_with_pvc" },
+  moisture_meter: { fileName: "02_moisture.jpg", imageType: "moisture_meter" },
+  truck_plate: { fileName: "03_license.jpg", imageType: "truck_plate" },
 };
 
 function buildReceiptImagePath(receiptId: string, imageId: RequiredReceiptImageId) {

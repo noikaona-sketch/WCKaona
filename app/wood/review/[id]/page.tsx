@@ -8,14 +8,10 @@ import { LoginRequiredMessage } from "@/components/LoginRequiredMessage";
 import { LogoutButton } from "@/components/LogoutButton";
 import { MobileHeader } from "@/components/MobileHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getReceiptImageLabel, normalizeReceiptImageType, requiredReceiptImageTypes } from "@/lib/receipt-image-types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const BUCKET_NAME = "wood-receipts";
-const imageLabels: Record<string, string> = {
-  license: "ทะเบียนรถ",
-  moisture: "เครื่องวัดความชื้น",
-  size: "ไม้บนรถ + PVC",
-};
 
 type ReviewStatus = "pending" | "approved" | "rejected";
 
@@ -285,15 +281,15 @@ export default function ReviewDetailPage({ params }: { params: Promise<{ id: str
           </section>
 
           <section className="mb-4 grid grid-cols-3 gap-2">
-            {["license", "moisture", "size"].map((imageType) => {
-              const image = images.find((item) => item.image_type === imageType);
+            {requiredReceiptImageTypes.map((imageType) => {
+              const image = images.find((item) => normalizeReceiptImageType(item.image_type) === imageType);
 
               return (
                 <div key={imageType} className="overflow-hidden rounded-2xl bg-white shadow-soft">
                   <div className="relative aspect-square bg-slate-100">
                     {image ? <Image src={image.signedUrl} alt="" fill sizes="33vw" unoptimized className="object-cover" /> : null}
                   </div>
-                  <p className="px-2 py-2 text-center text-xs font-bold text-slate-600">{imageLabels[imageType]}</p>
+                  <p className="px-2 py-2 text-center text-xs font-bold text-slate-600">{getReceiptImageLabel(imageType)}</p>
                 </div>
               );
             })}

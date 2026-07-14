@@ -2,18 +2,11 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { getReceiptImageLabel, getReceiptImageSortIndex } from "@/lib/receipt-image-types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const BUCKET_NAME = "wood-receipts";
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 10;
-
-const imageLabels: Record<string, string> = {
-  size: "ไม้บนรถ + PVC",
-  moisture: "เครื่องวัดความชื้น",
-  license: "ทะเบียนรถ",
-};
-
-const imageOrder = ["size", "moisture", "license"];
 
 export type ReceiptPreviewImage = {
   image_type: string;
@@ -33,8 +26,8 @@ type ReceiptImagePreviewCardsProps = {
 
 function sortImages(images: ReceiptPreviewImage[]) {
   return [...images].sort((left, right) => {
-    const leftIndex = imageOrder.indexOf(left.image_type);
-    const rightIndex = imageOrder.indexOf(right.image_type);
+    const leftIndex = getReceiptImageSortIndex(left.image_type);
+    const rightIndex = getReceiptImageSortIndex(right.image_type);
     return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
   });
 }
@@ -90,7 +83,7 @@ export function ReceiptImagePreviewCards({ images, className = "", emptyMessage 
       <div className={`grid grid-cols-3 gap-2 ${className}`}>
         {sortedImages.map((image) => {
           const signedImage = signedImages.find((item) => item.file_path === image.file_path);
-          const label = imageLabels[image.image_type] || image.image_type;
+          const label = getReceiptImageLabel(image.image_type);
 
           return (
             <button
@@ -119,13 +112,13 @@ export function ReceiptImagePreviewCards({ images, className = "", emptyMessage 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-soft">
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-              <p className="font-bold text-slate-950">{imageLabels[selectedImage.image_type] || selectedImage.image_type}</p>
+              <p className="font-bold text-slate-950">{getReceiptImageLabel(selectedImage.image_type)}</p>
               <button type="button" onClick={() => setSelectedImage(null)} className="h-10 rounded-full bg-slate-100 px-4 text-sm font-bold text-slate-700">
                 Close
               </button>
             </div>
             <div className="relative h-[70vh] bg-slate-950">
-              <Image src={selectedImage.signedUrl} alt={imageLabels[selectedImage.image_type] || selectedImage.image_type} fill sizes="100vw" unoptimized className="object-contain" />
+              <Image src={selectedImage.signedUrl} alt={getReceiptImageLabel(selectedImage.image_type)} fill sizes="100vw" unoptimized className="object-contain" />
             </div>
           </div>
         </div>

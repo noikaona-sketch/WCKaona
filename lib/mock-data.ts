@@ -1,18 +1,6 @@
-export type ReceiptStatus =
-  | "Draft"
-  | "Submitted"
-  | "AI Processing"
-  | "Pending Inbound Scale"
-  | "Pending Unload"
-  | "Pending Review"
-  | "Approved"
-  | "Pending Outbound Scale"
-  | "Net Weight Completed"
-  | "Closed"
-  | "Rejected"
-  | "Need Retake Photo"
-  | "Need Scale Correction"
-  | "Reopened";
+import { workflowStatuses, type ReceiptStatus } from "@/lib/receipt-status";
+
+export type { ReceiptStatus };
 
 export type Receipt = {
   id: string;
@@ -31,7 +19,7 @@ export const receipts: Receipt[] = [
     id: "wr-001",
     receiptNo: "WR-20260605-001",
     truckPlate: "70-1234",
-    status: "Pending Review",
+    status: "pending_review",
     aiGrade: "B+",
     moisture: 34.5,
     grossWeight: 31250,
@@ -42,7 +30,7 @@ export const receipts: Receipt[] = [
     id: "wr-002",
     receiptNo: "WR-20260605-002",
     truckPlate: "81-4556",
-    status: "Pending Unload",
+    status: "pending_unload",
     aiGrade: "A",
     moisture: 29.8,
     grossWeight: 28600,
@@ -53,7 +41,7 @@ export const receipts: Receipt[] = [
     id: "wr-003",
     receiptNo: "WR-20260605-003",
     truckPlate: "72-9988",
-    status: "Approved",
+    status: "approved",
     aiGrade: "B",
     moisture: 36.2,
     grossWeight: 30100,
@@ -62,15 +50,4 @@ export const receipts: Receipt[] = [
   },
 ];
 
-export const workflowStatuses: ReceiptStatus[] = [
-  "Draft",
-  "Submitted",
-  "AI Processing",
-  "Pending Inbound Scale",
-  "Pending Unload",
-  "Pending Review",
-  "Approved",
-  "Pending Outbound Scale",
-  "Net Weight Completed",
-  "Closed",
-];
+export { workflowStatuses };
