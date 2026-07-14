@@ -57,4 +57,5 @@ Verify functionality, security and reliability before production.
 - Automated regression tests
 - Load testing
 - CI validation
-- UAT checklist
+- Role guard UAT checklist: `docs/38_Role_Guard_UAT_Checklist.md`
+- Core workflow UAT checklist: `docs/39_Core_Workflow_UAT_Checklist.md`

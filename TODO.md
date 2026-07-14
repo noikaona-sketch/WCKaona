@@ -1,6 +1,6 @@
 # TODO - WC Kaona Progress Tracker
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-15
 
 ## Current Snapshot
 
@@ -146,7 +146,7 @@ Last reviewed: 2026-07-14
 - [ ] Add monitoring for upload failures and migration status.
 - [ ] Prepare backup/restore verification checklist.
 - [x] Prepare role-guard UAT checklist. See `docs/38_Role_Guard_UAT_Checklist.md`.
-- [ ] Prepare full UAT checklist mapped to the core receipt workflow.
+- [x] Prepare full UAT checklist mapped to the core receipt workflow. See `docs/39_Core_Workflow_UAT_Checklist.md`.
 
 ## Acceptance Checklist
 
@@ -164,4 +164,4 @@ Last reviewed: 2026-07-14
 
 ## Next Best Action
 
-Next best action: assign real roles to active users, then replace broad authenticated RLS with role-scoped policies in small route-by-route steps.
+Next best action: run the core workflow UAT checklist, assign real roles to active users, then replace broad authenticated RLS with role-scoped policies in small route-by-route steps.
