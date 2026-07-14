@@ -61,6 +61,14 @@ type MetricKey =
   | "manualReview"
   | "n8nFailed";
 
+type RoleReadiness = {
+  totalActive: number;
+  adminCount: number;
+  defaultFieldTeamCount: number;
+  inactiveCount: number;
+  readyToEnableGuards: boolean;
+};
+
 const metricCards: Array<{ key: MetricKey; label: string; tone: string }> = [
   { key: "active", label: "Active Jobs", tone: "border-slate-200" },
   { key: "pendingInbound", label: "Inbound Scale", tone: "border-blue-200" },
@@ -93,6 +101,21 @@ function getStatus(receipt: AdminReceipt): ReceiptStatus {
 
 function hasAiResult(receipt: AdminReceipt) {
   return Boolean(receipt.ai_analysis && receipt.ai_analysis.length > 0);
+}
+
+function getRoleReadiness(profiles: EmployeeProfileAdmin[]): RoleReadiness {
+  const totalActive = profiles.filter((profile) => profile.is_active).length;
+  const adminCount = profiles.filter((profile) => profile.is_active && normalizeEmployeeRole(profile.role) === "admin").length;
+  const defaultFieldTeamCount = profiles.filter((profile) => profile.is_active && normalizeEmployeeRole(profile.role) === "field_team").length;
+  const inactiveCount = profiles.filter((profile) => !profile.is_active).length;
+
+  return {
+    totalActive,
+    adminCount,
+    defaultFieldTeamCount,
+    inactiveCount,
+    readyToEnableGuards: totalActive > 0 && adminCount > 0,
+  };
 }
 
 async function loadEmployeeProfiles(accessToken: string) {
@@ -189,6 +212,8 @@ export default function AdminPage() {
     });
   }, [receipts]);
 
+  const roleReadiness = useMemo(() => getRoleReadiness(employeeProfiles), [employeeProfiles]);
+
   async function updateEmployeeProfile(userId: string, nextRole: EmployeeRole, nextIsActive: boolean) {
     setSavingUserId(userId);
     setRoleMessage("");
@@ -232,6 +257,25 @@ export default function AdminPage() {
               <p className="font-bold text-slate-950">{currentProfile.displayName}</p>
             </div>
             <p className="rounded-full bg-slate-100 px-3 py-2 font-bold text-slate-700">{employeeRoleLabels[currentProfile.role]}</p>
+          </section>
+        ) : null}
+
+        {currentProfile?.role === "admin" ? (
+          <section className={`rounded-2xl border p-4 shadow-soft ${roleReadiness.readyToEnableGuards ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase text-slate-600">Role Enforcement Readiness</p>
+                <h2 className="mt-1 text-lg font-bold text-slate-950">
+                  {roleReadiness.readyToEnableGuards ? "พร้อมทดสอบ ROLE_GUARDS_ENABLED=true ใน staging" : "ยังไม่พร้อมเปิด role enforcement"}
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-center text-sm sm:grid-cols-4">
+                <div className="rounded-xl bg-white/80 p-3"><p className="text-slate-500">Active</p><p className="font-black">{roleReadiness.totalActive}</p></div>
+                <div className="rounded-xl bg-white/80 p-3"><p className="text-slate-500">Admin</p><p className="font-black">{roleReadiness.adminCount}</p></div>
+                <div className="rounded-xl bg-white/80 p-3"><p className="text-slate-500">Field Team</p><p className="font-black">{roleReadiness.defaultFieldTeamCount}</p></div>
+                <div className="rounded-xl bg-white/80 p-3"><p className="text-slate-500">Inactive</p><p className="font-black">{roleReadiness.inactiveCount}</p></div>
+              </div>
+            </div>
           </section>
         ) : null}
 

@@ -52,9 +52,10 @@ where employee_code = 'YOUR_ADMIN_EMPLOYEE_CODE';
 
 3. Use `/wood/admin` to assign real roles to all active users in `employee_profiles`.
 4. Run the core workflow with `ROLE_GUARDS_ENABLED` unset and confirm audit metadata contains expected roles.
-5. Enable `ROLE_GUARDS_ENABLED=true` in a staging environment and verify each role with a UAT account.
-6. Replace broad authenticated RLS with route/action-specific policies.
-7. Move remaining client-side write flows behind API routes where audit and role checks are required.
+5. Follow `docs/38_Role_Guard_UAT_Checklist.md` in staging.
+6. Enable `ROLE_GUARDS_ENABLED=true` in a staging environment and verify each role with a UAT account.
+7. Replace broad authenticated RLS with route/action-specific policies.
+8. Move remaining client-side write flows behind API routes where audit and role checks are required.
 
 ## Guardrails
 

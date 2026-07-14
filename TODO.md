@@ -130,6 +130,7 @@ Last reviewed: 2026-07-14
 - [x] Add SQL helper functions for future role-scoped RLS policies.
 - [x] Add cutover-safe API role guards for inbound scale, unload, review, and outbound scale writes.
 - [x] Add admin role management API/UI for assigning employee roles before enforcement.
+- [x] Add admin Role Enforcement Readiness panel.
 - [ ] Bootstrap first admin profile in Supabase, then assign real roles to all active users.
 - [ ] Replace broad authenticated RLS with role-scoped policies.
 - [ ] Verify no service-role key or AI key can reach client bundles.
@@ -144,7 +145,8 @@ Last reviewed: 2026-07-14
 - [x] Add monitoring view for AI/manual-review and n8n failures in `/wood/admin`.
 - [ ] Add monitoring for upload failures and migration status.
 - [ ] Prepare backup/restore verification checklist.
-- [ ] Prepare UAT checklist mapped to the core workflow.
+- [x] Prepare role-guard UAT checklist. See `docs/38_Role_Guard_UAT_Checklist.md`.
+- [ ] Prepare full UAT checklist mapped to the core receipt workflow.
 
 ## Acceptance Checklist
 
