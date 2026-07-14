@@ -3,6 +3,6 @@
 -- Intentionally excludes role-policy changes and destructive rewrites.
 
 alter table public.wood_receipts
-  add column unloaded_at timestamptz;
+  add column if not exists unloaded_at timestamptz;
 
-create index wood_receipts_unloaded_at_idx on public.wood_receipts(unloaded_at) where deleted_at is null;
+create index if not exists wood_receipts_unloaded_at_idx on public.wood_receipts(unloaded_at) where deleted_at is null;
