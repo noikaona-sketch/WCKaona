@@ -69,7 +69,7 @@ export default function ReviewListPage() {
           .select("id, receipt_no, truck_plate, status, review_status, inbound_weight_kg, moisture_percent, received_at, created_by_name, ai_analysis(suggested_grade, confidence), receipt_images(image_type, file_path, file_name)")
           .is("deleted_at", null)
           .eq("review_status", "pending")
-          .in("status", ["pending_review", "Pending Review"])
+          .in("status", ["pending_review", "Pending Review", "pending_manual_review", "Pending Manual Review"])
           .order("created_at", { ascending: false })
           .limit(20);
 

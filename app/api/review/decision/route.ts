@@ -96,7 +96,8 @@ export async function POST(request: Request) {
 
     if (beforeError) throw beforeError;
 
-    if (normalizeReceiptStatus(beforeReceipt.status) !== "pending_review") {
+    const currentStatus = normalizeReceiptStatus(beforeReceipt.status);
+    if (currentStatus !== "pending_review" && currentStatus !== "pending_manual_review") {
       return NextResponse.json({ error: "Receipt is not waiting for review" }, { status: 409 });
     }
 
