@@ -63,7 +63,7 @@ Last reviewed: 2026-07-15
 
 - `components/ReceiptCard.tsx` still depends on `lib/mock-data.ts`, but current active workflow pages no longer import it.
 - Full role-scoped admin screens are not implemented yet.
-- Users, roles, grade rules, and reopen jobs still do not have dedicated management screens/APIs.
+- Grade rules still do not have a dedicated management screen/API.
 
 ## Known Gaps and Risks
 
@@ -134,7 +134,7 @@ Last reviewed: 2026-07-15
 - [ ] Bootstrap first admin profile in Supabase, then assign real roles to all active users.
 - [ ] Replace broad authenticated RLS with role-scoped policies.
 - [x] Add automated source check for service-role/AI/n8n secret references in client-reachable code. See `docs/40_Secret_Exposure_Checklist.md`.
-- [ ] Enforce closed receipts cannot be modified except through a controlled reopen/admin path.
+- [x] Enforce closed receipt correction through a controlled admin reopen API/UI with note and audit log.
 - [ ] Ensure manual adjustments require notes and audit logs.
 - [ ] Verify storage signed URL access and private bucket behavior.
 

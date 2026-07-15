@@ -84,6 +84,7 @@ For the completed receipt, verify:
 | Outbound weight greater than or equal to inbound weight | Outbound API rejects the save. |
 | Receipt not in expected status | API returns conflict and does not change the receipt. |
 | n8n dispatch failure | Admin watch list shows failure status when dispatch status is `failed`. |
+| Closed receipt correction | Admin can reopen a closed receipt only with a note; receipt status changes to selected correction queue and audit log is written. |
 
 ## Report Export Checks
 

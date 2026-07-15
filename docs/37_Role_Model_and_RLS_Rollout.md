@@ -37,6 +37,7 @@ Use these values in `employee_profiles.role`:
 - Role guard enforcement is controlled by `ROLE_GUARDS_ENABLED=true`. When it is not enabled, APIs continue working but audit metadata records the actor role and enforcement state.
 - `/wood/admin` includes an Employee Roles section for admins to change `employee_profiles.role` and `is_active`.
 - `/api/admin/employee-profiles` always requires an active `admin` profile, even before `ROLE_GUARDS_ENABLED=true`.
+- `/api/admin/reopen-receipt` always requires an active `admin` profile and records reopen metadata plus an audit log.
 - Existing broad authenticated RLS policies remain in place for now to avoid interrupting the working core flow.
 
 ## Rollout Order
@@ -61,5 +62,5 @@ where employee_code = 'YOUR_ADMIN_EMPLOYEE_CODE';
 
 - Do not tighten RLS before every active user has a role.
 - Do not let client code use service-role credentials.
-- Do not allow closed receipt changes except through a future admin reopen/correction API with audit notes.
+- Do not allow closed receipt changes except through the admin reopen/correction API with audit notes.
 - Keep compatibility for legacy records until a deliberate data migration is planned.

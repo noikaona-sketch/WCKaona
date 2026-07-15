@@ -27,6 +27,9 @@ type AdminReceipt = {
   created_by_name: string | null;
   reviewed_by_name: string | null;
   unloaded_by_name: string | null;
+  reopened_at?: string | null;
+  reopened_by_name?: string | null;
+  reopen_note?: string | null;
   ai_analysis: Array<{ id: string }> | null;
 };
 
@@ -84,8 +87,14 @@ const adminReadiness = [
   ["Users", "มีหน้าจัดการ role และ active status ของ employee profiles แล้ว"],
   ["Roles", "API หลักมี role guard แบบ cutover-safe แล้ว แต่ RLS ยังเป็น broad authenticated access"],
   ["Grade Rules", "ยังไม่มีตาราง rule กลางสำหรับเกรด/การปรับเกรด"],
-  ["Reopen Jobs", "ยังไม่มี API เปิดงาน closed กลับมาแก้พร้อม audit note"],
+  ["Reopen Jobs", "มี admin-only API/UI เปิด closed receipt กลับไปแก้พร้อม audit note แล้ว"],
 ] as const;
+
+const reopenTargets = [
+  ["pending_review", "Review / Grade"] as const,
+  ["pending_outbound_scale", "Outbound Scale"] as const,
+  ["pending_inbound_scale", "Inbound Scale"] as const,
+];
 
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString("th-TH") : "-";
@@ -138,6 +147,10 @@ export default function AdminPage() {
   const [message, setMessage] = useState("");
   const [roleMessage, setRoleMessage] = useState("");
   const [savingUserId, setSavingUserId] = useState("");
+  const [reopenTargetsByReceipt, setReopenTargetsByReceipt] = useState<Record<string, string>>({});
+  const [reopenNotes, setReopenNotes] = useState<Record<string, string>>({});
+  const [reopeningReceiptId, setReopeningReceiptId] = useState("");
+  const [reopenMessage, setReopenMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -161,7 +174,7 @@ export default function AdminPage() {
           supabase
             .from("wood_receipts")
             .select(
-              "id, receipt_no, truck_plate, status, review_status, n8n_dispatch_status, received_at, inbound_weight_kg, outbound_weight_kg, net_weight_kg, reviewed_grade, created_by_name, reviewed_by_name, unloaded_by_name, ai_analysis(id)",
+              "id, receipt_no, truck_plate, status, review_status, n8n_dispatch_status, received_at, inbound_weight_kg, outbound_weight_kg, net_weight_kg, reviewed_grade, created_by_name, reviewed_by_name, unloaded_by_name, reopened_at, reopened_by_name, reopen_note, ai_analysis(id)",
             )
             .is("deleted_at", null)
             .order("created_at", { ascending: false })
@@ -242,6 +255,42 @@ export default function AdminPage() {
       setRoleMessage(error instanceof Error ? error.message : "บันทึก role ไม่สำเร็จ");
     } finally {
       setSavingUserId("");
+    }
+  }
+
+  async function reopenReceipt(receiptId: string) {
+    const targetStatus = reopenTargetsByReceipt[receiptId] || "pending_outbound_scale";
+    const note = (reopenNotes[receiptId] || "").trim();
+    if (note.length < 5 || reopeningReceiptId) return;
+
+    setReopeningReceiptId(receiptId);
+    setReopenMessage("");
+
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session) throw new Error("กรุณาเข้าสู่ระบบก่อน reopen receipt");
+
+      const response = await fetch("/api/admin/reopen-receipt", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ receiptId, targetStatus, note }),
+      });
+      const body = (await response.json()) as { error?: string; receipt?: AdminReceipt };
+
+      if (!response.ok || !body.receipt) throw new Error(body.error || "เปิดงานกลับมาแก้ไม่สำเร็จ");
+
+      setReceipts((current) => current.map((receipt) => (receipt.id === receiptId ? { ...receipt, ...body.receipt } : receipt)));
+      setReopenNotes((current) => ({ ...current, [receiptId]: "" }));
+      setReopenMessage(`Reopened ${body.receipt.receipt_no || "receipt"} แล้ว`);
+    } catch (error) {
+      setReopenMessage(error instanceof Error ? error.message : "เปิดงานกลับมาแก้ไม่สำเร็จ");
+    } finally {
+      setReopeningReceiptId("");
     }
   }
 
@@ -342,6 +391,7 @@ export default function AdminPage() {
             <div className="mb-3">
               <p className="text-xs font-black uppercase text-brand-primary">Recent Receipts</p>
               <h2 className="text-lg font-bold text-slate-950">สถานะงานล่าสุด</h2>
+              {reopenMessage ? <p className="mt-2 rounded-xl bg-slate-50 p-2 text-sm font-semibold text-slate-600">{reopenMessage}</p> : null}
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-100 text-sm">
@@ -354,26 +404,65 @@ export default function AdminPage() {
                     <th className="px-3 py-2">Net</th>
                     <th className="px-3 py-2">Grade</th>
                     <th className="px-3 py-2">Owner</th>
+                    <th className="px-3 py-2">Reopen</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {loadState === "ready" && receipts.length === 0 ? (
-                    <tr><td className="px-3 py-4 text-slate-500" colSpan={7}>ยังไม่มี receipt</td></tr>
+                    <tr><td className="px-3 py-4 text-slate-500" colSpan={8}>ยังไม่มี receipt</td></tr>
                   ) : null}
-                  {receipts.slice(0, 20).map((receipt) => (
-                    <tr key={receipt.id} className="align-top">
-                      <td className="whitespace-nowrap px-3 py-3">
-                        <p className="font-bold">{receipt.receipt_no || "-"}</p>
-                        <p className="text-xs text-slate-500">{receipt.truck_plate || "-"}</p>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3">{getReceiptStatusLabel(receipt.status)}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{formatNumber(receipt.inbound_weight_kg)}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{formatNumber(receipt.outbound_weight_kg)}</td>
-                      <td className="whitespace-nowrap px-3 py-3 font-bold">{formatNumber(receipt.net_weight_kg)}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{receipt.reviewed_grade || "-"}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{receipt.reviewed_by_name || receipt.unloaded_by_name || receipt.created_by_name || "-"}</td>
-                    </tr>
-                  ))}
+                  {receipts.slice(0, 20).map((receipt) => {
+                    const canReopen = currentProfile?.role === "admin" && getStatus(receipt) === "closed";
+                    const note = reopenNotes[receipt.id] || "";
+                    const isReopening = reopeningReceiptId === receipt.id;
+                    return (
+                      <tr key={receipt.id} className="align-top">
+                        <td className="whitespace-nowrap px-3 py-3">
+                          <p className="font-bold">{receipt.receipt_no || "-"}</p>
+                          <p className="text-xs text-slate-500">{receipt.truck_plate || "-"}</p>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3">{getReceiptStatusLabel(receipt.status)}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{formatNumber(receipt.inbound_weight_kg)}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{formatNumber(receipt.outbound_weight_kg)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 font-bold">{formatNumber(receipt.net_weight_kg)}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{receipt.reviewed_grade || "-"}</td>
+                        <td className="whitespace-nowrap px-3 py-3">{receipt.reviewed_by_name || receipt.unloaded_by_name || receipt.created_by_name || "-"}</td>
+                        <td className="min-w-[260px] px-3 py-3">
+                          {canReopen ? (
+                            <div className="grid gap-2">
+                              <select
+                                value={reopenTargetsByReceipt[receipt.id] || "pending_outbound_scale"}
+                                disabled={isReopening}
+                                onChange={(event) => setReopenTargetsByReceipt((current) => ({ ...current, [receipt.id]: event.target.value }))}
+                                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-brand-primary"
+                              >
+                                {reopenTargets.map(([value, label]) => (
+                                  <option key={value} value={value}>{label}</option>
+                                ))}
+                              </select>
+                              <input
+                                value={note}
+                                disabled={isReopening}
+                                onChange={(event) => setReopenNotes((current) => ({ ...current, [receipt.id]: event.target.value.slice(0, 500) }))}
+                                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-primary"
+                                placeholder="เหตุผลการเปิดแก้"
+                              />
+                              <button
+                                type="button"
+                                disabled={note.trim().length < 5 || isReopening}
+                                onClick={() => reopenReceipt(receipt.id)}
+                                className="h-10 rounded-xl bg-brand-primary px-3 text-sm font-bold text-white disabled:bg-slate-300"
+                              >
+                                {isReopening ? "Reopening..." : "Reopen"}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
