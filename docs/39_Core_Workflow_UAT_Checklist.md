@@ -50,7 +50,7 @@ Use this checklist to verify the wood receiving workflow end-to-end before produ
 | 11 | Outbound scale | `/wood/outbound-scale` | Receipt appears in outbound queue. |
 | 12 | Outbound scale | `/api/outbound-scale/save` | Tare/outbound weight saves; net weight calculates; status becomes `closed`. |
 | 13 | Any allowed reader | `/wood/history` | Closed receipt appears in history. |
-| 14 | Any allowed reader | `/wood/reports` | Daily KPIs reflect the completed receipt. |
+| 14 | Any allowed reader | `/wood/reports` | Daily KPIs, grade summary, supplier summary, and CSV export reflect the completed receipt. |
 | 15 | Admin | `/wood/admin` | Operations console reflects closed count and no unexpected watch-list item. |
 
 ## Data Verification
@@ -84,6 +84,13 @@ For the completed receipt, verify:
 | Outbound weight greater than or equal to inbound weight | Outbound API rejects the save. |
 | Receipt not in expected status | API returns conflict and does not change the receipt. |
 | n8n dispatch failure | Admin watch list shows failure status when dispatch status is `failed`. |
+
+## Report Export Checks
+
+- CSV export downloads a file named `wood-daily-report-YYYY-MM-DD.csv`.
+- CSV opens in Excel with readable Thai text.
+- CSV includes receipt number, supplier, status, grade, gross weight, net weight, moisture, and received timestamp.
+- Supplier summary totals match the exported rows for the same date.
 
 ## Role Guard UAT
 

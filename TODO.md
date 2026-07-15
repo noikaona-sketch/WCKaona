@@ -141,7 +141,8 @@ Last reviewed: 2026-07-15
 ### P4 - Reports, Monitoring, and Ops
 
 - [x] Replace static reports with Supabase-backed daily summaries.
-- [ ] Add grade summary, supplier report, Excel export, and dashboard data.
+- [x] Add grade summary, supplier summary, and CSV export to daily reports.
+- [ ] Add monthly dashboard data and richer export/audit tracking.
 - [x] Add monitoring view for AI/manual-review and n8n failures in `/wood/admin`.
 - [ ] Add monitoring for upload failures and migration status.
 - [ ] Prepare backup/restore verification checklist.
