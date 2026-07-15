@@ -133,7 +133,7 @@ Last reviewed: 2026-07-15
 - [x] Add admin Role Enforcement Readiness panel.
 - [ ] Bootstrap first admin profile in Supabase, then assign real roles to all active users.
 - [ ] Replace broad authenticated RLS with role-scoped policies.
-- [ ] Verify no service-role key or AI key can reach client bundles.
+- [x] Add automated source check for service-role/AI/n8n secret references in client-reachable code. See `docs/40_Secret_Exposure_Checklist.md`.
 - [ ] Enforce closed receipts cannot be modified except through a controlled reopen/admin path.
 - [ ] Ensure manual adjustments require notes and audit logs.
 - [ ] Verify storage signed URL access and private bucket behavior.

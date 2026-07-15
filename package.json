@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
+    "security:client-env": "node scripts/check-client-secret-usage.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
